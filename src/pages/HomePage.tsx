@@ -57,6 +57,7 @@ export function HomePage() {
                   src={HERO_IMAGE}
                   alt="Prime System Group architectural glass and aluminium engineering pavilion in Japan"
                   className="w-full h-full object-cover"
+                  priority
                 />
               </div>
             </div>

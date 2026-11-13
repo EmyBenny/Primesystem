@@ -431,3 +431,46 @@ export async function fetchUserProfile(uid: string): Promise<UserProfile | null>
     handleFirestoreError(error, OperationType.GET, path);
   }
 }
+
+export interface AdminSecurityDoc {
+  algorithm: 'PBKDF2-SHA256';
+  iterations: number;
+  saltHex: string;
+  hashHex: string;
+  updatedBy: string;
+  updatedAt?: unknown;
+}
+
+export async function fetchAdminSecurityRecord(): Promise<AdminSecurityDoc | null> {
+  const path = 'adminSecurity/master';
+  try {
+    const snap = await getDoc(doc(db, 'adminSecurity', 'master'));
+    if (!snap.exists()) return null;
+    return snap.data() as AdminSecurityDoc;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, path);
+  }
+}
+
+export async function saveAdminSecurityRecord(record: {
+  algorithm: 'PBKDF2-SHA256';
+  iterations: number;
+  saltHex: string;
+  hashHex: string;
+  updatedBy: string;
+}): Promise<void> {
+  const path = 'adminSecurity/master';
+  try {
+    await setDoc(doc(db, 'adminSecurity', 'master'), {
+      algorithm: record.algorithm,
+      iterations: record.iterations,
+      saltHex: record.saltHex,
+      hashHex: record.hashHex,
+      updatedBy: record.updatedBy,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+

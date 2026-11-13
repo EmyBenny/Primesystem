@@ -2,28 +2,36 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Calendar,
   CheckCircle2,
+  Eye,
+  EyeOff,
   FileText,
   ImagePlus,
+  KeyRound,
   LayoutDashboard,
+  Lock,
   LogIn,
   LogOut,
   MessageSquare,
   Package,
   Plus,
   ShieldAlert,
+  ShieldCheck,
   Trash2,
   Upload,
 } from 'lucide-react';
 import { processImageFile } from '../utils/imageUpload';
+import { hashAdminPassword, verifyAdminPassword } from '../utils/passwordCrypto';
 import {
   CATEGORY_IMAGES,
   PRODUCT_CATEGORIES,
 } from '../data/catalogSeed';
 import { useAuth } from '../context/AuthContext';
-import { useCart } from '../context/CartContext';
 import { useProducts } from '../context/ProductsContext';
 import {
+  AdminSecurityDoc,
   deleteProductById,
+  fetchAdminSecurityRecord,
+  saveAdminSecurityRecord,
   saveProduct,
   seedCatalogProducts,
   subscribeAllInquiries,
@@ -41,8 +49,11 @@ import {
   StockStatus,
 } from '../types';
 import { ResilientImage } from '../components/ResilientImage';
+import { InvoiceReceiptModal } from '../components/InvoiceReceiptModal';
 
-type AdminTab = 'overview' | 'products' | 'orders' | 'bookings' | 'inquiries';
+type AdminTab = 'overview' | 'products' | 'orders' | 'bookings' | 'inquiries' | 'security';
+
+const ADMIN_UNLOCK_SESSION_KEY = 'psg_admin_unlocked_uid_v1';
 
 const ORDER_STATUSES: OrderStatus[] = [
   'Confirmed',
@@ -70,13 +81,31 @@ function formatDate(ts: unknown): string {
 export function AdminPage() {
   const { user, loading: authLoading, isAdmin, signIn, logout } = useAuth();
   const { products, fromFirestore } = useProducts();
-  const { setActiveInvoice } = useCart();
 
+  const [selectedInvoice, setSelectedInvoice] = useState<Order | null>(null);
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [orders, setOrders] = useState<Order[]>([]);
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [seeding, setSeeding] = useState(false);
   const [statusNotice, setStatusNotice] = useState('');
+
+  // Hashed Admin Password Security Gate State
+  const [securityRecord, setSecurityRecord] = useState<AdminSecurityDoc | null>(null);
+  const [loadingSecurity, setLoadingSecurity] = useState(false);
+  const [passwordUnlocked, setPasswordUnlocked] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
+  const [showPasswordText, setShowPasswordText] = useState(false);
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const [failedAttempts, setFailedAttempts] = useState(0);
+
+  // Rotate Password Form State (inside Security tab)
+  const [currentPwd, setCurrentPwd] = useState('');
+  const [newPwd, setNewPwd] = useState('');
+  const [confirmNewPwd, setConfirmNewPwd] = useState('');
+  const [rotateMsg, setRotateMsg] = useState('');
+  const [rotateError, setRotateError] = useState('');
 
   // Product Form Modal State
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -102,7 +131,39 @@ export function AdminPage() {
   const [formError, setFormError] = useState('');
 
   useEffect(() => {
-    if (!user || !isAdmin) return;
+    if (!user || !isAdmin) {
+      setSecurityRecord(null);
+      setPasswordUnlocked(false);
+      return;
+    }
+
+    let active = true;
+    setLoadingSecurity(true);
+    fetchAdminSecurityRecord()
+      .then((rec) => {
+        if (!active) return;
+        setSecurityRecord(rec);
+        const unlockedUid = sessionStorage.getItem(ADMIN_UNLOCK_SESSION_KEY);
+        if (rec && unlockedUid === user.uid) {
+          setPasswordUnlocked(true);
+        } else {
+          setPasswordUnlocked(false);
+        }
+      })
+      .catch(() => {
+        if (active) setPasswordUnlocked(false);
+      })
+      .finally(() => {
+        if (active) setLoadingSecurity(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user, isAdmin]);
+
+  useEffect(() => {
+    if (!user || !isAdmin || !passwordUnlocked) return;
     const unsubOrders = subscribeAllOrders(
       (list) => setOrders(list),
       () => setOrders([])
@@ -115,7 +176,121 @@ export function AdminPage() {
       unsubOrders();
       unsubInquiries();
     };
-  }, [user, isAdmin]);
+  }, [user, isAdmin, passwordUnlocked]);
+
+  const handleCreateMasterPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    setPasswordError('');
+    if (passwordInput.length < 8) {
+      setPasswordError('Admin password must be at least 8 characters long.');
+      return;
+    }
+    if (passwordInput !== confirmPasswordInput) {
+      setPasswordError('Passwords do not match.');
+      return;
+    }
+
+    setPasswordBusy(true);
+    try {
+      const hashed = await hashAdminPassword(passwordInput);
+      await saveAdminSecurityRecord({
+        ...hashed,
+        updatedBy: user.uid,
+      });
+      setSecurityRecord({
+        ...hashed,
+        updatedBy: user.uid,
+      });
+      sessionStorage.setItem(ADMIN_UNLOCK_SESSION_KEY, user.uid);
+      setPasswordUnlocked(true);
+      setPasswordInput('');
+      setConfirmPasswordInput('');
+    } catch (err) {
+      setPasswordError(err instanceof Error ? err.message : 'Unable to save hashed password.');
+    } finally {
+      setPasswordBusy(false);
+    }
+  };
+
+  const handleVerifyMasterPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !securityRecord) return;
+    setPasswordError('');
+    setPasswordBusy(true);
+    try {
+      const valid = await verifyAdminPassword(passwordInput, securityRecord);
+      if (!valid) {
+        setFailedAttempts((c) => c + 1);
+        setPasswordError('Incorrect admin password. Verification failed.');
+        setPasswordBusy(false);
+        return;
+      }
+      sessionStorage.setItem(ADMIN_UNLOCK_SESSION_KEY, user.uid);
+      setPasswordUnlocked(true);
+      setPasswordInput('');
+      setFailedAttempts(0);
+    } catch (err) {
+      setPasswordError(err instanceof Error ? err.message : 'Password verification failed.');
+    } finally {
+      setPasswordBusy(false);
+    }
+  };
+
+  const handleRotatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !securityRecord) return;
+    setRotateError('');
+    setRotateMsg('');
+
+    if (newPwd.length < 8) {
+      setRotateError('New password must be at least 8 characters.');
+      return;
+    }
+    if (newPwd !== confirmNewPwd) {
+      setRotateError('New passwords do not match.');
+      return;
+    }
+
+    setPasswordBusy(true);
+    try {
+      const validCurrent = await verifyAdminPassword(currentPwd, securityRecord);
+      if (!validCurrent) {
+        setRotateError('Current password is incorrect.');
+        setPasswordBusy(false);
+        return;
+      }
+      const hashed = await hashAdminPassword(newPwd);
+      await saveAdminSecurityRecord({
+        ...hashed,
+        updatedBy: user.uid,
+      });
+      setSecurityRecord({
+        ...hashed,
+        updatedBy: user.uid,
+      });
+      setCurrentPwd('');
+      setNewPwd('');
+      setConfirmNewPwd('');
+      setRotateMsg('Admin password re-salted and hashed with PBKDF2-SHA256.');
+    } catch (err) {
+      setRotateError(err instanceof Error ? err.message : 'Failed to update password.');
+    } finally {
+      setPasswordBusy(false);
+    }
+  };
+
+  const handleLockPortal = () => {
+    sessionStorage.removeItem(ADMIN_UNLOCK_SESSION_KEY);
+    setPasswordUnlocked(false);
+    setPasswordInput('');
+  };
+
+  const handleAdminSignOut = async () => {
+    sessionStorage.removeItem(ADMIN_UNLOCK_SESSION_KEY);
+    setPasswordUnlocked(false);
+    await logout();
+  };
 
   const metrics = useMemo(() => {
     const activeOrders = orders.filter((o) => o.status !== 'Cancelled');
@@ -275,24 +450,27 @@ export function AdminPage() {
     }
   };
 
-  if (authLoading) {
+  if (authLoading || (user && isAdmin && loadingSecurity)) {
     return (
-      <div className="max-w-[1280px] mx-auto px-6 lg:px-10 py-16">
-        <div className="h-64 bg-[#F3ECE0] border border-[#E2D8C5]" />
+      <div className="min-h-screen bg-[#FAF6EA] flex items-center justify-center p-6">
+        <div className="w-full max-w-md h-56 bg-[#F3ECE0] border border-[#E2D8C5]" />
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="max-w-[1280px] mx-auto px-6 lg:px-10 py-20">
-        <div className="max-w-md mx-auto bg-[#FFFDF7] border border-[#E2D8C5] p-8 text-center space-y-4">
+      <div className="min-h-screen bg-[#FAF6EA] flex items-center justify-center p-6">
+        <div className="w-full max-w-md bg-[#FFFDF7] border border-[#E2D8C5] p-8 text-center space-y-5">
+          <div className="text-xs font-mono uppercase tracking-wider text-[#5A1418]">
+            Prime System Group · Restricted Domain
+          </div>
           <LayoutDashboard className="w-8 h-8 text-[#5A1418] mx-auto" />
           <h1 className="text-2xl font-bold text-[#1F1815]">
-            Prime System Group Admin Portal
+            Standalone Admin Portal
           </h1>
           <p className="text-sm text-[#584B44]">
-            Sign in with your authorized administrator Google account to manage product inventory, customer orders, bookings, and invoice receipts.
+            Verify your authorized administrator Google identity first, then unlock the portal with your hashed admin password.
           </p>
           <button
             type="button"
@@ -300,7 +478,7 @@ export function AdminPage() {
             className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-[#5A1418] text-[#FAF6EA] text-sm font-semibold hover:bg-[#400D10] transition-colors cursor-pointer"
           >
             <LogIn className="w-4 h-4" />
-            Sign In with Google
+            Continue with Google Admin Account
           </button>
         </div>
       </div>
@@ -309,18 +487,18 @@ export function AdminPage() {
 
   if (!isAdmin) {
     return (
-      <div className="max-w-[1280px] mx-auto px-6 lg:px-10 py-20">
-        <div className="max-w-lg mx-auto bg-[#FFFDF7] border border-[#E2D8C5] p-8 text-center space-y-4">
+      <div className="min-h-screen bg-[#FAF6EA] flex items-center justify-center p-6">
+        <div className="w-full max-w-lg bg-[#FFFDF7] border border-[#E2D8C5] p-8 text-center space-y-4">
           <ShieldAlert className="w-8 h-8 text-[#5A1418] mx-auto" />
           <h1 className="text-xl font-bold text-[#1F1815]">
-            Administrator Access Required
+            Administrator Access Denied
           </h1>
           <p className="text-sm text-[#584B44]">
-            Signed in as <span className="font-mono text-[#1F1815]">{user.email}</span>. This account does not hold administrator privileges for Prime System Group.
+            Signed in as <span className="font-mono text-[#1F1815]">{user.email}</span>. This account is not authorized to access the Prime System Group Admin Portal.
           </p>
           <button
             type="button"
-            onClick={() => logout()}
+            onClick={() => handleAdminSignOut()}
             className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold border border-[#5A1418] text-[#5A1418] hover:bg-[#5A1418] hover:text-[#FAF6EA] transition-colors cursor-pointer"
           >
             <LogOut className="w-4 h-4" />
@@ -331,15 +509,180 @@ export function AdminPage() {
     );
   }
 
+  // Hashed Password Security Gate (First-Time Setup OR Verification)
+  if (!passwordUnlocked) {
+    return (
+      <div className="min-h-screen bg-[#FAF6EA] flex items-center justify-center p-6">
+        <div className="w-full max-w-md bg-[#FFFDF7] border border-[#E2D8C5] p-8 space-y-6">
+          <div className="space-y-2 text-center">
+            <div className="text-xs font-mono uppercase tracking-wider text-[#5A1418]">
+              PBKDF2-SHA256 Password Verification
+            </div>
+            <KeyRound className="w-8 h-8 text-[#5A1418] mx-auto" />
+            <h1 className="text-2xl font-bold text-[#1F1815]">
+              {securityRecord ? 'Enter Admin Password' : 'Set Hashed Admin Password'}
+            </h1>
+            <p className="text-xs text-[#584B44]">
+              Verified identity: <span className="font-mono text-[#1F1815]">{user.email}</span>
+            </p>
+          </div>
+
+          {securityRecord ? (
+            <form onSubmit={handleVerifyMasterPassword} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-[#584B44] mb-1">
+                  Admin Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPasswordText ? 'text' : 'password'}
+                    required
+                    value={passwordInput}
+                    onChange={(e) => setPasswordInput(e.target.value)}
+                    placeholder="Enter your admin password"
+                    className="w-full px-3 py-2.5 pr-10 text-sm bg-[#FAF6EA] border border-[#E2D8C5] focus:outline-none focus:border-[#5A1418]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPasswordText((v) => !v)}
+                    aria-label={showPasswordText ? 'Hide password' : 'Show password'}
+                    className="absolute right-2.5 top-2.5 text-[#7C6E65] hover:text-[#1F1815] cursor-pointer"
+                  >
+                    {showPasswordText ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {passwordError && (
+                <div className="p-3 text-xs text-[#5A1418] bg-[#5A1418]/10 border border-[#5A1418]/30">
+                  {passwordError} {failedAttempts > 1 ? `(${failedAttempts} failed attempts)` : ''}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={passwordBusy}
+                className="w-full py-3 px-4 bg-[#5A1418] text-[#FAF6EA] text-sm font-semibold hover:bg-[#400D10] disabled:opacity-60 transition-colors cursor-pointer"
+              >
+                {passwordBusy ? 'Verifying Hash...' : 'Unlock Admin Portal'}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleCreateMasterPassword} className="space-y-4">
+              <p className="text-xs text-[#584B44] bg-[#F3ECE0] border border-[#E2D8C5] p-3 leading-relaxed">
+                Create your admin password. It is cryptographically salted and hashed using PBKDF2-SHA256 (120,000 iterations) before storing in Firestore; plaintext is never stored.
+              </p>
+              <div>
+                <label className="block text-xs font-medium text-[#584B44] mb-1">
+                  New Admin Password (min 8 chars) *
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPasswordText ? 'text' : 'password'}
+                    required
+                    minLength={8}
+                    value={passwordInput}
+                    onChange={(e) => setPasswordInput(e.target.value)}
+                    className="w-full px-3 py-2.5 pr-10 text-sm bg-[#FAF6EA] border border-[#E2D8C5] focus:outline-none focus:border-[#5A1418]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPasswordText((v) => !v)}
+                    aria-label={showPasswordText ? 'Hide password' : 'Show password'}
+                    className="absolute right-2.5 top-2.5 text-[#7C6E65] hover:text-[#1F1815] cursor-pointer"
+                  >
+                    {showPasswordText ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#584B44] mb-1">
+                  Confirm Password *
+                </label>
+                <input
+                  type={showPasswordText ? 'text' : 'password'}
+                  required
+                  minLength={8}
+                  value={confirmPasswordInput}
+                  onChange={(e) => setConfirmPasswordInput(e.target.value)}
+                  className="w-full px-3 py-2.5 text-sm bg-[#FAF6EA] border border-[#E2D8C5] focus:outline-none focus:border-[#5A1418]"
+                />
+              </div>
+
+              {passwordError && (
+                <div className="p-3 text-xs text-[#5A1418] bg-[#5A1418]/10 border border-[#5A1418]/30">
+                  {passwordError}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={passwordBusy}
+                className="w-full py-3 px-4 bg-[#5A1418] text-[#FAF6EA] text-sm font-semibold hover:bg-[#400D10] disabled:opacity-60 transition-colors cursor-pointer"
+              >
+                {passwordBusy ? 'Hashing & Saving...' : 'Hash Password & Enter Portal'}
+              </button>
+            </form>
+          )}
+
+          <div className="pt-4 border-t border-[#E2D8C5] text-center">
+            <button
+              type="button"
+              onClick={() => handleAdminSignOut()}
+              className="text-xs font-medium text-[#584B44] hover:text-[#5A1418] cursor-pointer"
+            >
+              Sign out ({user.email})
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const bookingOrders = orders.filter((o) => o.orderType === 'booking');
 
   return (
-    <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-10">
+    <div className="min-h-screen bg-[#FAF6EA] text-[#1F1815]">
+      {/* Standalone Admin Portal Header (Completely separated from storefront) */}
+      <header className="no-print bg-[#F3ECE0] border-b border-[#E2D8C5]">
+        <div className="max-w-[1400px] mx-auto px-6 lg:px-10 h-16 flex items-center justify-between gap-6">
+          <div className="flex items-center gap-3">
+            <span className="text-base font-bold tracking-tight text-[#5A1418] whitespace-nowrap">
+              Prime System Group
+            </span>
+            <span className="text-[#7C6E65]" aria-hidden="true">/</span>
+            <span className="text-xs font-mono text-[#584B44] whitespace-nowrap">
+              Admin Portal
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={handleLockPortal}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-[#E2D8C5] bg-[#FFFDF7] text-[#584B44] hover:text-[#5A1418] hover:border-[#5A1418] cursor-pointer whitespace-nowrap"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              Lock
+            </button>
+            <button
+              type="button"
+              onClick={() => handleAdminSignOut()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-[#E2D8C5] bg-[#FFFDF7] text-[#584B44] hover:text-[#1F1815] cursor-pointer whitespace-nowrap"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              Sign Out
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-10">
       {/* Top Admin Workspace Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-[#E2D8C5]">
         <div>
           <div className="text-xs font-mono text-[#7C6E65]">
-            Admin / Prime System Group / Operations Console
+            Operations Console · {user.email}
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-[#1F1815] mt-1">
             Executive Admin Dashboard
@@ -363,14 +706,6 @@ export function AdminPage() {
           >
             <Plus className="w-3.5 h-3.5" />
             Add Product
-          </button>
-          <button
-            type="button"
-            onClick={() => logout()}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium border border-[#E2D8C5] text-[#584B44] hover:text-[#1F1815] cursor-pointer whitespace-nowrap"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            Sign Out
           </button>
         </div>
       </div>
@@ -397,6 +732,7 @@ export function AdminPage() {
             { id: 'orders', label: `Orders & Invoices (${orders.length})`, icon: FileText },
             { id: 'bookings', label: `Bookings (${bookingOrders.length})`, icon: Calendar },
             { id: 'inquiries', label: `Trade Inquiries (${inquiries.length})`, icon: MessageSquare },
+            { id: 'security', label: 'Security & Password', icon: ShieldCheck },
           ].map((item) => {
             const Icon = item.icon;
             const active = activeTab === item.id;
@@ -485,7 +821,7 @@ export function AdminPage() {
                             <td className="py-3 px-4 font-mono font-semibold text-[#5A1418]">
                               <button
                                 type="button"
-                                onClick={() => setActiveInvoice(o)}
+                                onClick={() => setSelectedInvoice(o)}
                                 className="hover:underline cursor-pointer"
                               >
                                 {o.invoiceNumber}
@@ -657,7 +993,7 @@ export function AdminPage() {
                           <td className="py-3 px-4 text-right whitespace-nowrap">
                             <button
                               type="button"
-                              onClick={() => setActiveInvoice(o)}
+                              onClick={() => setSelectedInvoice(o)}
                               className="px-3 py-1 bg-[#5A1418] text-[#FAF6EA] font-semibold cursor-pointer"
                             >
                               Invoice
@@ -724,6 +1060,103 @@ export function AdminPage() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* TAB 6: SECURITY & HASHED PASSWORD */}
+          {activeTab === 'security' && (
+            <div className="bg-[#FFFDF7] border border-[#E2D8C5] p-6 sm:p-8 space-y-6">
+              <div className="border-b border-[#E2D8C5] pb-4 space-y-1">
+                <h2 className="text-base font-bold text-[#1F1815]">
+                  Admin Password & Cryptographic Hash Settings
+                </h2>
+                <p className="text-xs text-[#584B44]">
+                  Your portal password is protected with a unique 128-bit random salt and 120,000-iteration PBKDF2-SHA256 derivation.
+                </p>
+              </div>
+
+              {securityRecord && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs bg-[#FAF6EA] border border-[#E2D8C5] p-4">
+                  <div>
+                    <div className="text-[#7C6E65]">Hash Algorithm</div>
+                    <div className="font-mono font-semibold text-[#1F1815] mt-0.5">
+                      {securityRecord.algorithm}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[#7C6E65]">Key Stretching</div>
+                    <div className="font-mono font-semibold tabular-nums text-[#1F1815] mt-0.5">
+                      {securityRecord.iterations.toLocaleString()} iterations
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[#7C6E65]">Stored Salt Prefix</div>
+                    <div className="font-mono text-[#5A1418] mt-0.5">
+                      {securityRecord.saltHex.slice(0, 12)}...
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <form onSubmit={handleRotatePassword} className="space-y-4 max-w-md">
+                <div>
+                  <label className="block text-xs font-medium text-[#584B44] mb-1">
+                    Current Admin Password *
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={currentPwd}
+                    onChange={(e) => setCurrentPwd(e.target.value)}
+                    className="w-full px-3 py-2 text-sm bg-[#FAF6EA] border border-[#E2D8C5]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#584B44] mb-1">
+                    New Admin Password (min 8 chars) *
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    value={newPwd}
+                    onChange={(e) => setNewPwd(e.target.value)}
+                    className="w-full px-3 py-2 text-sm bg-[#FAF6EA] border border-[#E2D8C5]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#584B44] mb-1">
+                    Confirm New Password *
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    value={confirmNewPwd}
+                    onChange={(e) => setConfirmNewPwd(e.target.value)}
+                    className="w-full px-3 py-2 text-sm bg-[#FAF6EA] border border-[#E2D8C5]"
+                  />
+                </div>
+
+                {rotateError && (
+                  <div className="p-3 text-xs text-[#5A1418] bg-[#5A1418]/10 border border-[#5A1418]/30">
+                    {rotateError}
+                  </div>
+                )}
+                {rotateMsg && (
+                  <div className="p-3 text-xs text-[#1F1815] bg-[#F3ECE0] border border-[#E2D8C5]">
+                    {rotateMsg}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={passwordBusy}
+                  className="px-5 py-2.5 text-xs font-semibold bg-[#5A1418] text-[#FAF6EA] hover:bg-[#400D10] cursor-pointer"
+                >
+                  {passwordBusy ? 'Re-Hashing...' : 'Update & Hash Password'}
+                </button>
+              </form>
             </div>
           )}
         </div>
@@ -1028,6 +1461,12 @@ export function AdminPage() {
           </div>
         </div>
       )}
+
+      <InvoiceReceiptModal
+        order={selectedInvoice}
+        onClose={() => setSelectedInvoice(null)}
+      />
+      </div>
     </div>
   );
 }

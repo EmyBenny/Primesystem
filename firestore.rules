@@ -175,6 +175,18 @@ service cloud.firestore {
       data.createdAt is timestamp;
     }
 
+    function isValidAdminSecurity(data) {
+      return data.keys().hasAll(['algorithm', 'iterations', 'saltHex', 'hashHex', 'updatedBy', 'updatedAt']) &&
+      data.keys().hasOnly(['algorithm', 'iterations', 'saltHex', 'hashHex', 'updatedBy', 'updatedAt']) &&
+      data.algorithm == 'PBKDF2-SHA256' &&
+      data.iterations is number && data.iterations >= 100000 && data.iterations <= 500000 &&
+      data.saltHex is string && data.saltHex.size() >= 32 && data.saltHex.size() <= 64 &&
+      data.hashHex is string && data.hashHex.size() >= 64 && data.hashHex.size() <= 128 &&
+      data.updatedBy == request.auth.uid &&
+      isValidId(data.updatedBy) &&
+      data.updatedAt is timestamp;
+    }
+
     // --- Collection Rules ---
 
     match /products/{productId} {
@@ -294,6 +306,16 @@ service cloud.firestore {
         isValidAdminMember(incoming(), userId) &&
         incoming().createdAt == request.time;
       allow update, delete: if isAdmin() && isValidId(userId);
+    }
+
+    match /adminSecurity/{docId} {
+      allow get: if isAdmin() && isValidId(docId);
+      allow list: if false;
+      allow create, update: if isAdmin() &&
+        docId == 'master' &&
+        isValidAdminSecurity(incoming()) &&
+        incoming().updatedAt == request.time;
+      allow delete: if false;
     }
   }
 }

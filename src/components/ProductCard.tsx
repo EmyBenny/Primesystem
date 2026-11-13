@@ -22,6 +22,7 @@ export function ProductCard({ product }: ProductCardProps) {
           alt={product.name}
           fallbackTitle={product.category}
           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+          priority={product.featured}
         />
       </Link>
 

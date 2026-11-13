@@ -9,9 +9,9 @@ import { InvoiceReceiptModal } from './InvoiceReceiptModal';
 const PRIMARY_NAV = [
   { label: 'Products', to: '/products' },
   { label: 'Manufacturing', to: '/manufacturing' },
+  { label: 'Markets', to: '/markets' },
   { label: 'About', to: '/about' },
   { label: 'Invoices', to: '/invoices' },
-  { label: 'Admin', to: '/admin' },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -82,7 +82,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
             {[
               { label: 'Home', to: '/' },
               ...PRIMARY_NAV,
-              { label: 'Markets', to: '/markets' },
               { label: 'Contact', to: '/contact' },
             ].map((item) => (
               <NavLink
@@ -166,8 +165,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <Link to="/contact" className="block text-[#584B44] hover:text-[#5A1418]">
                 Japan Office & Trade Desk
               </Link>
-              <Link to="/admin" className="block font-medium text-[#5A1418] hover:underline">
-                Admin Dashboard Portal
+              <Link to="/products" className="block font-medium text-[#5A1418] hover:underline">
+                Order & Fabrication Storefront
               </Link>
             </div>
           </div>

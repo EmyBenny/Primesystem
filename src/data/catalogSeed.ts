@@ -1,11 +1,11 @@
 import { Product, ProductCategory } from '../types';
-import heroPrimeImg from '../assets/images/hero_prime_architecture_1794572192524.jpg';
-import glassDoorsImg from '../assets/images/product_glass_doors_1794572193933.jpg';
-import aluminiumSystemsImg from '../assets/images/product_aluminium_systems_1794572194445.jpg';
-import securityGlassImg from '../assets/images/product_security_glass_1794572193692.jpg';
-import architecturalCeilingsImg from '../assets/images/product_architectural_ceilings_1794572194497.jpg';
-import heavyMachineryImg from '../assets/images/product_heavy_machinery_1794572195586.jpg';
-import poolSystemsImg from '../assets/images/product_pool_systems_1794572196621.jpg';
+import heroPrimeImg from '../assets/images/hero_prime_architecture_1794572192524.webp';
+import glassDoorsImg from '../assets/images/product_glass_doors_1794572193933.webp';
+import aluminiumSystemsImg from '../assets/images/product_aluminium_systems_1794572194445.webp';
+import securityGlassImg from '../assets/images/product_security_glass_1794572193692.webp';
+import architecturalCeilingsImg from '../assets/images/product_architectural_ceilings_1794572194497.webp';
+import heavyMachineryImg from '../assets/images/product_heavy_machinery_1794572195586.webp';
+import poolSystemsImg from '../assets/images/product_pool_systems_1794572196621.webp';
 
 export const COMPANY_INFO = {
   name: 'Prime System Group',

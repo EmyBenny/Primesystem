@@ -428,6 +428,41 @@
         }
       },
       "required": ["uid", "email", "role", "createdAt"]
+    },
+    "AdminSecurity": {
+      "title": "AdminSecurity",
+      "description": "Salted PBKDF2-SHA256 hashed admin portal password record.",
+      "type": "object",
+      "properties": {
+        "algorithm": {
+          "type": "string",
+          "enum": ["PBKDF2-SHA256"]
+        },
+        "iterations": {
+          "type": "number"
+        },
+        "saltHex": {
+          "type": "string",
+          "minLength": 32,
+          "maxLength": 64
+        },
+        "hashHex": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 128
+        },
+        "updatedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["algorithm", "iterations", "saltHex", "hashHex", "updatedBy", "updatedAt"]
     }
   },
   "firestore": {
@@ -454,6 +489,10 @@
     "/admins/{userId}": {
       "schema": { "$ref": "#/entities/AdminMember" },
       "description": "Admin role registry."
+    },
+    "/adminSecurity/{docId}": {
+      "schema": { "$ref": "#/entities/AdminSecurity" },
+      "description": "Salted PBKDF2-SHA256 hashed password credentials accessible strictly to verified admins."
     }
   }
 }

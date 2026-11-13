@@ -11,10 +11,34 @@ interface ProductsContextValue {
 
 const ProductsContext = createContext<ProductsContextValue | undefined>(undefined);
 
+const CATALOG_CACHE_KEY = 'psg_catalog_cache_v2';
+
+function readCachedCatalog(): { products: Product[]; fromFirestore: boolean } | null {
+  try {
+    const raw = localStorage.getItem(CATALOG_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { products?: Product[]; fromFirestore?: boolean };
+    if (Array.isArray(parsed.products) && parsed.products.length > 0) {
+      return {
+        products: parsed.products,
+        fromFirestore: Boolean(parsed.fromFirestore),
+      };
+    }
+  } catch {
+    // ignore storage errors
+  }
+  return null;
+}
+
 export function ProductsProvider({ children }: { children: React.ReactNode }) {
-  const [products, setProducts] = useState<Product[]>(DEFAULT_PRODUCTS);
-  const [loading, setLoading] = useState(true);
-  const [fromFirestore, setFromFirestore] = useState(false);
+  const initialCache = readCachedCatalog();
+  const [products, setProducts] = useState<Product[]>(
+    initialCache?.products ?? DEFAULT_PRODUCTS
+  );
+  const [loading, setLoading] = useState(false);
+  const [fromFirestore, setFromFirestore] = useState(
+    initialCache?.fromFirestore ?? false
+  );
 
   useEffect(() => {
     const unsub = subscribeProducts(
@@ -22,10 +46,16 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
         setProducts(list);
         setFromFirestore(isLive);
         setLoading(false);
+        try {
+          localStorage.setItem(
+            CATALOG_CACHE_KEY,
+            JSON.stringify({ products: list, fromFirestore: isLive })
+          );
+        } catch {
+          // ignore storage quota errors
+        }
       },
       () => {
-        setProducts(DEFAULT_PRODUCTS);
-        setFromFirestore(false);
         setLoading(false);
       }
     );

@@ -6,7 +6,7 @@ export interface ProcessedImageResult {
   sizeKb: number;
 }
 
-const MAX_DATA_URL_CHARS = 320000;
+const MAX_DATA_URL_CHARS = 180000;
 
 export async function processImageFile(file: File): Promise<ProcessedImageResult> {
   if (!file.type.startsWith('image/')) {
@@ -22,9 +22,9 @@ export async function processImageFile(file: File): Promise<ProcessedImageResult
       el.src = objectUrl;
     });
 
-    const maxDim = 960;
-    let targetW = img.naturalWidth || 800;
-    let targetH = img.naturalHeight || 600;
+    const maxDim = 720;
+    let targetW = img.naturalWidth || 720;
+    let targetH = img.naturalHeight || 540;
 
     if (targetW > maxDim || targetH > maxDim) {
       const ratio = Math.min(maxDim / targetW, maxDim / targetH);
@@ -40,22 +40,26 @@ export async function processImageFile(file: File): Promise<ProcessedImageResult
       throw new Error('Image processing canvas is unavailable in this browser.');
     }
 
-    // Fill warm cream background before drawing transparent PNGs
     ctx.fillStyle = '#FAF6EA';
     ctx.fillRect(0, 0, targetW, targetH);
     ctx.drawImage(img, 0, 0, targetW, targetH);
 
-    let quality = 0.84;
-    let dataUrl = canvas.toDataURL('image/jpeg', quality);
+    // Prefer compact WebP for sub-second loading; fallback to JPEG if unsupported
+    let mime = 'image/webp';
+    let quality = 0.78;
+    let dataUrl = canvas.toDataURL(mime, quality);
+    if (!dataUrl.startsWith('data:image/webp')) {
+      mime = 'image/jpeg';
+      dataUrl = canvas.toDataURL(mime, quality);
+    }
 
-    while (dataUrl.length > MAX_DATA_URL_CHARS && quality > 0.35) {
+    while (dataUrl.length > MAX_DATA_URL_CHARS && quality > 0.38) {
       quality -= 0.12;
-      dataUrl = canvas.toDataURL('image/jpeg', quality);
+      dataUrl = canvas.toDataURL(mime, quality);
     }
 
     if (dataUrl.length > MAX_DATA_URL_CHARS) {
-      // Scale down further if still large
-      const scale = 0.7;
+      const scale = 0.72;
       canvas.width = Math.max(1, Math.round(targetW * scale));
       canvas.height = Math.max(1, Math.round(targetH * scale));
       const ctx2 = canvas.getContext('2d');
@@ -63,7 +67,7 @@ export async function processImageFile(file: File): Promise<ProcessedImageResult
         ctx2.fillStyle = '#FAF6EA';
         ctx2.fillRect(0, 0, canvas.width, canvas.height);
         ctx2.drawImage(img, 0, 0, canvas.width, canvas.height);
-        dataUrl = canvas.toDataURL('image/jpeg', 0.72);
+        dataUrl = canvas.toDataURL(mime, 0.7);
         targetW = canvas.width;
         targetH = canvas.height;
       }
