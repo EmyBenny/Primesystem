@@ -1,0 +1,459 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "Manufactured architectural, glass, aluminium, machinery, and pool system products available for order or booking.",
+      "type": "object",
+      "properties": {
+        "sku": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 40,
+          "description": "Unique product SKU identifier"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 140,
+          "description": "Product display title"
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "Glass Doors & Windows",
+            "Aluminium Systems",
+            "Security Glass",
+            "Architectural Ceilings",
+            "Heavy Machinery",
+            "Swimming Pool Systems"
+          ],
+          "description": "Primary product division category"
+        },
+        "division": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80,
+          "description": "Corporate manufacturing division"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 1500,
+          "description": "Detailed technical product description"
+        },
+        "specifications": {
+          "type": "array",
+          "description": "Key technical specifications (max 10 entries)"
+        },
+        "priceUsd": {
+          "type": "number",
+          "description": "Unit price in USD"
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 40,
+          "description": "Unit of measure (e.g. per unit, per sqm, per set)"
+        },
+        "stockStatus": {
+          "type": "string",
+          "enum": ["In Stock", "Made to Order", "Pre-Order"],
+          "description": "Fulfillment availability status"
+        },
+        "bookable": {
+          "type": "boolean",
+          "description": "Whether item supports scheduled fabrication or machinery booking"
+        },
+        "imageUrl": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 350000,
+          "description": "Product image path, uploaded data URL, or asset URL"
+        },
+        "featured": {
+          "type": "boolean",
+          "description": "Featured on storefront showcase"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last update"
+        }
+      },
+      "required": [
+        "sku",
+        "name",
+        "category",
+        "division",
+        "description",
+        "specifications",
+        "priceUsd",
+        "unit",
+        "stockStatus",
+        "bookable",
+        "imageUrl",
+        "featured",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer purchase order or fabrication booking with official invoice receipt metadata.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the customer placing the order or booking"
+        },
+        "invoiceNumber": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 40,
+          "pattern": "^PSG-[0-9]{4}-[0-9]{4,8}$",
+          "description": "Official Prime System Group invoice number"
+        },
+        "orderType": {
+          "type": "string",
+          "enum": ["order", "booking"],
+          "description": "Direct e-commerce purchase or scheduled fabrication/machinery booking"
+        },
+        "customerName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120,
+          "description": "Customer full name"
+        },
+        "companyName": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 140,
+          "description": "Optional customer organization name"
+        },
+        "customerEmail": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 160,
+          "description": "Customer email address"
+        },
+        "customerPhone": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 40,
+          "description": "Customer phone or WhatsApp contact"
+        },
+        "shippingAddress": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 300,
+          "description": "Delivery or project site address"
+        },
+        "destinationRegion": {
+          "type": "string",
+          "enum": ["Japan", "Europe", "Asia", "Taiwan", "International"],
+          "description": "Commercial market region"
+        },
+        "bookingDate": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 40,
+          "description": "Requested booking or delivery schedule date"
+        },
+        "notes": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 600,
+          "description": "Custom fabrication dimensions or shipping instructions"
+        },
+        "subtotalUsd": {
+          "type": "number",
+          "description": "Line item subtotal in USD"
+        },
+        "taxUsd": {
+          "type": "number",
+          "description": "Tax amount in USD"
+        },
+        "totalUsd": {
+          "type": "number",
+          "description": "Grand total invoiced amount in USD"
+        },
+        "itemCount": {
+          "type": "number",
+          "description": "Total line item quantity"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Confirmed", "In Fabrication", "Dispatched", "Completed", "Cancelled"],
+          "description": "Fulfillment lifecycle status"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of invoice issuance"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last status update"
+        }
+      },
+      "required": [
+        "userId",
+        "invoiceNumber",
+        "orderType",
+        "customerName",
+        "companyName",
+        "customerEmail",
+        "customerPhone",
+        "shippingAddress",
+        "destinationRegion",
+        "bookingDate",
+        "notes",
+        "subtotalUsd",
+        "taxUsd",
+        "totalUsd",
+        "itemCount",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "OrderItem": {
+      "title": "OrderItem",
+      "description": "Individual product line item inside an order or booking invoice.",
+      "type": "object",
+      "properties": {
+        "orderId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "productId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "sku": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 40
+        },
+        "productName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 140
+        },
+        "category": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 40
+        },
+        "quantity": {
+          "type": "number"
+        },
+        "unitPriceUsd": {
+          "type": "number"
+        },
+        "lineTotalUsd": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "orderId",
+        "userId",
+        "productId",
+        "sku",
+        "productName",
+        "category",
+        "unit",
+        "quantity",
+        "unitPriceUsd",
+        "lineTotalUsd"
+      ]
+    },
+    "Inquiry": {
+      "title": "Inquiry",
+      "description": "B2B procurement, custom fabrication, or international trading inquiry.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "company": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 140
+        },
+        "email": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "phone": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 40
+        },
+        "market": {
+          "type": "string",
+          "enum": ["Japan", "Europe", "Asia", "Taiwan", "Other"]
+        },
+        "division": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "message": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 2000
+        },
+        "status": {
+          "type": "string",
+          "enum": ["New", "Reviewed", "Quoted", "Closed"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "userId",
+        "name",
+        "company",
+        "email",
+        "phone",
+        "market",
+        "division",
+        "message",
+        "status",
+        "createdAt"
+      ]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private customer billing and contact profile.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "email": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "companyName": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 140
+        },
+        "phone": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 40
+        },
+        "shippingAddress": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 300
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "displayName", "email", "updatedAt"]
+    },
+    "AdminMember": {
+      "title": "AdminMember",
+      "description": "Authorized Prime System Group administrator record.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "email", "role", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Publicly readable catalog of construction, glass, aluminium, machinery, and pool products; writable only by admins."
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "Customer e-commerce orders and fabrication bookings with invoice metadata."
+    },
+    "/orders/{orderId}/items/{itemId}": {
+      "schema": { "$ref": "#/entities/OrderItem" },
+      "description": "Line items belonging to a specific order/invoice."
+    },
+    "/inquiries/{inquiryId}": {
+      "schema": { "$ref": "#/entities/Inquiry" },
+      "description": "International trading and custom manufacturing quote inquiries."
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private customer billing profile isolated per user UID."
+    },
+    "/admins/{userId}": {
+      "schema": { "$ref": "#/entities/AdminMember" },
+      "description": "Admin role registry."
+    }
+  }
+}

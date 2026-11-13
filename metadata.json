@@ -1,0 +1,8 @@
+{
+  "name": "Prime System Group",
+  "description": "Japanese manufacturing, fabrication, architectural systems, heavy machinery, and international trading e-commerce platform.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
