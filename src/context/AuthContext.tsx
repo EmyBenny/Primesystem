@@ -4,8 +4,10 @@ import { doc, getDoc } from 'firebase/firestore';
 import {
   auth,
   BOOTSTRAPPED_ADMIN_EMAIL,
+  completeGoogleRedirectResult,
   db,
   signInWithGooglePopup,
+  signInWithGoogleRedirect,
   signOutUser,
   testFirestoreConnection,
 } from '../lib/firebase';
@@ -18,6 +20,7 @@ interface AuthContextValue {
   loading: boolean;
   isAdmin: boolean;
   signIn: () => Promise<User | null>;
+  signInRedirect: () => Promise<void>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -32,6 +35,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     testFirestoreConnection();
+    completeGoogleRedirectResult().catch(() => {
+      // Ignore redirect completion errors if none pending
+    });
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
@@ -72,6 +78,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return result.user;
   };
 
+  const signInRedirect = async () => {
+    await signInWithGoogleRedirect();
+  };
+
   const logout = async () => {
     await signOutUser();
   };
@@ -84,7 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, profile, loading, isAdmin, signIn, logout, refreshProfile }}
+      value={{ user, profile, loading, isAdmin, signIn, signInRedirect, logout, refreshProfile }}
     >
       {children}
     </AuthContext.Provider>

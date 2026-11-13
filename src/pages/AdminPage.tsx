@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { processImageFile } from '../utils/imageUpload';
 import { hashAdminPassword, verifyAdminPassword } from '../utils/passwordCrypto';
+import { FIREBASE_PROJECT_ID } from '../lib/firebase';
 import {
   CATEGORY_IMAGES,
   PRODUCT_CATEGORIES,
@@ -79,10 +80,12 @@ function formatDate(ts: unknown): string {
 }
 
 export function AdminPage() {
-  const { user, loading: authLoading, isAdmin, signIn, logout } = useAuth();
+  const { user, loading: authLoading, isAdmin, signIn, signInRedirect, logout } = useAuth();
   const { products, fromFirestore } = useProducts();
 
   const [selectedInvoice, setSelectedInvoice] = useState<Order | null>(null);
+  const [authError, setAuthError] = useState('');
+  const [signingIn, setSigningIn] = useState(false);
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [orders, setOrders] = useState<Order[]>([]);
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
@@ -458,6 +461,40 @@ export function AdminPage() {
     );
   }
 
+  const formatAuthError = (err: unknown): string => {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('auth/unauthorized-domain')) {
+      return `This domain (${window.location.hostname}) is not yet allowlisted in Firebase Auth. Add "${window.location.hostname}" under Firebase Console → Project "${FIREBASE_PROJECT_ID}" → Authentication → Settings → Authorized domains.`;
+    }
+    if (msg.includes('auth/popup-blocked')) {
+      return 'Popup was blocked by your browser. Use the Redirect Sign-In option below.';
+    }
+    return msg;
+  };
+
+  const handleAdminGoogleSignIn = async () => {
+    setAuthError('');
+    setSigningIn(true);
+    try {
+      await signIn();
+    } catch (err) {
+      setAuthError(formatAuthError(err));
+    } finally {
+      setSigningIn(false);
+    }
+  };
+
+  const handleAdminRedirectSignIn = async () => {
+    setAuthError('');
+    setSigningIn(true);
+    try {
+      await signInRedirect();
+    } catch (err) {
+      setAuthError(formatAuthError(err));
+      setSigningIn(false);
+    }
+  };
+
   if (!user) {
     return (
       <div className="min-h-screen bg-[#FAF6EA] flex items-center justify-center p-6">
@@ -472,13 +509,40 @@ export function AdminPage() {
           <p className="text-sm text-[#584B44]">
             Verify your authorized administrator Google identity first, then unlock the portal with your hashed admin password.
           </p>
+
+          {authError && (
+            <div className="p-3 text-left text-xs text-[#5A1418] bg-[#5A1418]/10 border border-[#5A1418]/30 space-y-2">
+              <p>{authError}</p>
+              {authError.includes('Authorized domains') && (
+                <a
+                  href={`https://console.firebase.google.com/project/${FIREBASE_PROJECT_ID}/authentication/settings`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block font-semibold underline"
+                >
+                  Open Firebase Authorized Domains Settings →
+                </a>
+              )}
+            </div>
+          )}
+
           <button
             type="button"
-            onClick={() => signIn()}
-            className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-[#5A1418] text-[#FAF6EA] text-sm font-semibold hover:bg-[#400D10] transition-colors cursor-pointer"
+            disabled={signingIn}
+            onClick={handleAdminGoogleSignIn}
+            className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-[#5A1418] text-[#FAF6EA] text-sm font-semibold hover:bg-[#400D10] disabled:opacity-60 transition-colors cursor-pointer"
           >
             <LogIn className="w-4 h-4" />
-            Continue with Google Admin Account
+            {signingIn ? 'Connecting Google Account...' : 'Continue with Google Admin Account'}
+          </button>
+
+          <button
+            type="button"
+            disabled={signingIn}
+            onClick={handleAdminRedirectSignIn}
+            className="text-xs font-medium text-[#584B44] hover:text-[#5A1418] underline cursor-pointer"
+          >
+            Popup blocked? Sign in via redirect instead
           </button>
         </div>
       </div>

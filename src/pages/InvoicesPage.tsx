@@ -20,12 +20,31 @@ function formatTimestamp(ts: unknown): string {
 }
 
 export function InvoicesPage() {
-  const { user, loading: authLoading, signIn } = useAuth();
+  const { user, loading: authLoading, signIn, signInRedirect } = useAuth();
   const { setActiveInvoice } = useCart();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchInvoice, setSearchInvoice] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'order' | 'booking'>('all');
+  const [signInError, setSignInError] = useState('');
+
+  const handleCustomerSignIn = async () => {
+    setSignInError('');
+    try {
+      await signIn();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('auth/unauthorized-domain')) {
+        setSignInError(
+          `Domain (${window.location.hostname}) is not yet allowlisted in Firebase Auth Authorized Domains.`
+        );
+      } else if (msg.includes('auth/popup-blocked')) {
+        setSignInError('Popup blocked by browser. Use the redirect sign-in option below.');
+      } else {
+        setSignInError(msg);
+      }
+    }
+  };
 
   useEffect(() => {
     if (!user) {
@@ -104,14 +123,28 @@ export function InvoicesPage() {
           <p className="text-sm text-[#584B44]">
             For customer billing privacy, invoice receipts and fabrication booking records are bound to your verified Google account.
           </p>
-          <button
-            type="button"
-            onClick={() => signIn()}
-            className="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold bg-[#5A1418] text-[#FAF6EA] hover:bg-[#400D10] transition-colors cursor-pointer"
-          >
-            <LogIn className="w-4 h-4" />
-            Sign In with Google
-          </button>
+          {signInError && (
+            <div className="p-3 text-left text-xs text-[#5A1418] bg-[#5A1418]/10 border border-[#5A1418]/30">
+              {signInError}
+            </div>
+          )}
+          <div className="flex flex-col items-center gap-2">
+            <button
+              type="button"
+              onClick={handleCustomerSignIn}
+              className="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold bg-[#5A1418] text-[#FAF6EA] hover:bg-[#400D10] transition-colors cursor-pointer"
+            >
+              <LogIn className="w-4 h-4" />
+              Sign In with Google
+            </button>
+            <button
+              type="button"
+              onClick={() => signInRedirect().catch((e) => setSignInError(String(e)))}
+              className="text-xs font-medium text-[#584B44] hover:text-[#5A1418] underline cursor-pointer"
+            >
+              Popup blocked? Sign in via redirect instead
+            </button>
+          </div>
         </div>
       ) : (
         <div className="space-y-6">

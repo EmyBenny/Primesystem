@@ -54,6 +54,7 @@ export default function App() {
             <Suspense fallback={<RouteFallback />}>
               <Routes>
                 {/* Standalone Separated Admin Portal (no storefront header/footer) */}
+                <Route path="/admin" element={<AdminPage />} />
                 <Route path="/admin/*" element={<AdminPage />} />
 
                 {/* Public Customer Storefront & Corporate Pages */}
