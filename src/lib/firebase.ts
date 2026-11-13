@@ -1,11 +1,16 @@
 import { initializeApp } from 'firebase/app';
 import {
+  createUserWithEmailAndPassword,
+  EmailAuthProvider,
   getAuth,
   getRedirectResult,
   GoogleAuthProvider,
+  reauthenticateWithCredential,
+  signInWithEmailAndPassword,
   signInWithPopup,
   signInWithRedirect,
   signOut,
+  updatePassword,
 } from 'firebase/auth';
 import {
   doc,
@@ -21,6 +26,7 @@ export const googleProvider = new GoogleAuthProvider();
 
 export const BOOTSTRAPPED_ADMIN_EMAIL = 'uzorbenny51@gmail.com';
 export const FIREBASE_PROJECT_ID = firebaseConfig.projectId;
+export const FIREBASE_DATABASE_ID = firebaseConfig.firestoreDatabaseId;
 
 export enum OperationType {
   CREATE = 'create',
@@ -97,6 +103,29 @@ export async function signInWithGoogleRedirect() {
 
 export async function completeGoogleRedirectResult() {
   return getRedirectResult(auth);
+}
+
+export async function signInWithAdminEmailPassword(email: string, password: string) {
+  return signInWithEmailAndPassword(auth, email, password);
+}
+
+export async function createAdminEmailPasswordAccount(email: string, password: string) {
+  return createUserWithEmailAndPassword(auth, email, password);
+}
+
+export async function updateAdminFirebasePassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<void> {
+  const currentUser = auth.currentUser;
+  if (!currentUser || !currentUser.email) return;
+  const usesPasswordProvider = currentUser.providerData.some(
+    (p) => p.providerId === 'password'
+  );
+  if (!usesPasswordProvider) return;
+  const credential = EmailAuthProvider.credential(currentUser.email, currentPassword);
+  await reauthenticateWithCredential(currentUser, credential);
+  await updatePassword(currentUser, newPassword);
 }
 
 export async function signOutUser() {

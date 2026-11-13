@@ -5,8 +5,8 @@
 2. **Order & Invoice Ownership**: Every document in `/orders/{orderId}` must be created by a verified authenticated user (`request.auth.token.email_verified == true`) with `userId == request.auth.uid`, initial `status == 'Confirmed'`, server timestamps (`createdAt == request.time`, `updatedAt == request.time`), and valid `PSG-YYYY-NNNN` invoice format.
 3. **Order Line-Item Relational Sync (Master Gate)**: Every document in `/orders/{orderId}/items/{itemId}` requires the parent `/orders/{orderId}` document to exist (or `existsAfter` in the atomic batch) and belong to `request.auth.uid`.
 4. **Terminal State Locking**: Once an order reaches `'Completed'` or `'Cancelled'`, non-admins cannot alter it; in fact only Admins can transition order statuses via `affectedKeys().hasOnly(['status', 'updatedAt'])`.
-5. **PII Isolation**: Customer emails, phone numbers, and shipping addresses in `/orders`, `/inquiries`, and `/users` are strictly unreadable by other customers (`resource.data.userId == request.auth.uid || isBootstrappedAdmin()`).
-6. **Privilege Escalation Prevention**: Users cannot write to `/admins/{userId}` unless already a verified Admin. Unverified emails are always denied writes.
+5. **PII Isolation**: Customer emails, phone numbers, and shipping addresses in `/orders`, `/inquiries`, and `/users` are strictly unreadable by other customers (`resource.data.userId == request.auth.uid || isAdmin()`).
+6. **Privilege Escalation Prevention**: Users cannot write to `/admins/{userId}` unless already an authorized Admin. Unverified emails are always denied writes on customer collections.
 
 ## 2. The "Dirty Dozen" Adversarial Payloads
 1. **Unauthenticated Product Creation**: `create /products/p1` without auth -> `PERMISSION_DENIED`.

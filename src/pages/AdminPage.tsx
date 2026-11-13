@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Calendar,
   CheckCircle2,
+  Copy,
   Eye,
   EyeOff,
   FileText,
@@ -11,17 +12,28 @@ import {
   Lock,
   LogIn,
   LogOut,
+  Mail,
   MessageSquare,
   Package,
   Plus,
+  RefreshCw,
   ShieldAlert,
   ShieldCheck,
   Trash2,
   Upload,
 } from 'lucide-react';
 import { processImageFile } from '../utils/imageUpload';
-import { hashAdminPassword, verifyAdminPassword } from '../utils/passwordCrypto';
-import { FIREBASE_PROJECT_ID } from '../lib/firebase';
+import {
+  ADMIN_LOGIN_EMAIL,
+  BOOTSTRAP_ADMIN_PASSWORD_HASH,
+  hashAdminPassword,
+  verifyAdminPassword,
+} from '../utils/passwordCrypto';
+import {
+  FIREBASE_DATABASE_ID,
+  FIREBASE_PROJECT_ID,
+  updateAdminFirebasePassword,
+} from '../lib/firebase';
 import {
   CATEGORY_IMAGES,
   PRODUCT_CATEGORIES,
@@ -80,10 +92,24 @@ function formatDate(ts: unknown): string {
 }
 
 export function AdminPage() {
-  const { user, loading: authLoading, isAdmin, signIn, signInRedirect, logout } = useAuth();
+  const {
+    user,
+    loading: authLoading,
+    isAdmin,
+    signInWithEmail,
+    createAccountWithEmail,
+    recheckAdminRole,
+    logout,
+  } = useAuth();
   const { products, fromFirestore } = useProducts();
 
   const [selectedInvoice, setSelectedInvoice] = useState<Order | null>(null);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [operationNotAllowed, setOperationNotAllowed] = useState(false);
+  const [copiedUid, setCopiedUid] = useState(false);
+  const [checkingRole, setCheckingRole] = useState(false);
   const [authError, setAuthError] = useState('');
   const [signingIn, setSigningIn] = useState(false);
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
@@ -143,11 +169,30 @@ export function AdminPage() {
     let active = true;
     setLoadingSecurity(true);
     fetchAdminSecurityRecord()
-      .then((rec) => {
+      .then(async (rec) => {
         if (!active) return;
-        setSecurityRecord(rec);
+        let resolvedRec = rec;
+        if (!resolvedRec && user.email?.toLowerCase() === ADMIN_LOGIN_EMAIL) {
+          try {
+            await saveAdminSecurityRecord({
+              ...BOOTSTRAP_ADMIN_PASSWORD_HASH,
+              updatedBy: user.uid,
+            });
+            resolvedRec = {
+              ...BOOTSTRAP_ADMIN_PASSWORD_HASH,
+              updatedBy: user.uid,
+            };
+          } catch {
+            resolvedRec = {
+              ...BOOTSTRAP_ADMIN_PASSWORD_HASH,
+              updatedBy: user.uid,
+            };
+          }
+        }
+        if (!active) return;
+        setSecurityRecord(resolvedRec);
         const unlockedUid = sessionStorage.getItem(ADMIN_UNLOCK_SESSION_KEY);
-        if (rec && unlockedUid === user.uid) {
+        if (resolvedRec && unlockedUid === user.uid) {
           setPasswordUnlocked(true);
         } else {
           setPasswordUnlocked(false);
@@ -263,6 +308,7 @@ export function AdminPage() {
         setPasswordBusy(false);
         return;
       }
+      await updateAdminFirebasePassword(currentPwd, newPwd);
       const hashed = await hashAdminPassword(newPwd);
       await saveAdminSecurityRecord({
         ...hashed,
@@ -275,7 +321,7 @@ export function AdminPage() {
       setCurrentPwd('');
       setNewPwd('');
       setConfirmNewPwd('');
-      setRotateMsg('Admin password re-salted and hashed with PBKDF2-SHA256.');
+      setRotateMsg('Admin password updated and hashed with PBKDF2-SHA256.');
     } catch (err) {
       setRotateError(err instanceof Error ? err.message : 'Failed to update password.');
     } finally {
@@ -461,112 +507,257 @@ export function AdminPage() {
     );
   }
 
-  const formatAuthError = (err: unknown): string => {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes('auth/unauthorized-domain')) {
-      return `This domain (${window.location.hostname}) is not yet allowlisted in Firebase Auth. Add "${window.location.hostname}" under Firebase Console → Project "${FIREBASE_PROJECT_ID}" → Authentication → Settings → Authorized domains.`;
-    }
-    if (msg.includes('auth/popup-blocked')) {
-      return 'Popup was blocked by your browser. Use the Redirect Sign-In option below.';
-    }
-    return msg;
-  };
-
-  const handleAdminGoogleSignIn = async () => {
+  const handleAdminEmailLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
     setAuthError('');
+    setOperationNotAllowed(false);
+
+    const normalizedEmail = loginEmail.trim().toLowerCase();
+    if (!normalizedEmail || !loginPassword) {
+      setAuthError('Please enter both your admin email and password.');
+      return;
+    }
+
     setSigningIn(true);
     try {
-      await signIn();
+      let signedUser;
+      try {
+        signedUser = await signInWithEmail(normalizedEmail, loginPassword);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (
+          (msg.includes('auth/user-not-found') || msg.includes('auth/invalid-credential')) &&
+          normalizedEmail === ADMIN_LOGIN_EMAIL
+        ) {
+          const matchesBootstrap = await verifyAdminPassword(
+            loginPassword,
+            BOOTSTRAP_ADMIN_PASSWORD_HASH
+          );
+          if (!matchesBootstrap) {
+            throw new Error('Invalid email or password.');
+          }
+          try {
+            signedUser = await createAccountWithEmail(normalizedEmail, loginPassword);
+          } catch (createErr) {
+            const createMsg = createErr instanceof Error ? createErr.message : String(createErr);
+            if (createMsg.includes('auth/email-already-in-use')) {
+              throw new Error('Invalid password for admin@mail.com.');
+            }
+            throw createErr;
+          }
+        } else {
+          throw err;
+        }
+      }
+
+      sessionStorage.setItem(ADMIN_UNLOCK_SESSION_KEY, signedUser.uid);
+      setPasswordUnlocked(true);
+      setLoginPassword('');
     } catch (err) {
-      setAuthError(formatAuthError(err));
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('auth/operation-not-allowed')) {
+        setOperationNotAllowed(true);
+        setAuthError(
+          'Email/Password sign-in is not yet enabled in Firebase Authentication for this project.'
+        );
+      } else if (
+        msg.includes('auth/wrong-password') ||
+        msg.includes('auth/invalid-credential') ||
+        msg.includes('auth/user-not-found')
+      ) {
+        setAuthError('Invalid admin email or password.');
+      } else if (msg.includes('auth/too-many-requests')) {
+        setAuthError('Too many failed login attempts. Please wait a moment and try again.');
+      } else {
+        setAuthError(msg);
+      }
     } finally {
       setSigningIn(false);
     }
   };
 
-  const handleAdminRedirectSignIn = async () => {
-    setAuthError('');
-    setSigningIn(true);
+  const handleCopyUid = async (uid: string) => {
     try {
-      await signInRedirect();
-    } catch (err) {
-      setAuthError(formatAuthError(err));
-      setSigningIn(false);
+      await navigator.clipboard.writeText(uid);
+      setCopiedUid(true);
+      setTimeout(() => setCopiedUid(false), 2000);
+    } catch {
+      // Clipboard blocked
+    }
+  };
+
+  const handleRecheckAuthorization = async () => {
+    setCheckingRole(true);
+    try {
+      await recheckAdminRole();
+    } finally {
+      setCheckingRole(false);
     }
   };
 
   if (!user) {
     return (
       <div className="min-h-screen bg-[#FAF6EA] flex items-center justify-center p-6">
-        <div className="w-full max-w-md bg-[#FFFDF7] border border-[#E2D8C5] p-8 text-center space-y-5">
-          <div className="text-xs font-mono uppercase tracking-wider text-[#5A1418]">
-            Prime System Group · Restricted Domain
-          </div>
-          <LayoutDashboard className="w-8 h-8 text-[#5A1418] mx-auto" />
-          <h1 className="text-2xl font-bold text-[#1F1815]">
-            Standalone Admin Portal
-          </h1>
-          <p className="text-sm text-[#584B44]">
-            Verify your authorized administrator Google identity first, then unlock the portal with your hashed admin password.
-          </p>
-
-          {authError && (
-            <div className="p-3 text-left text-xs text-[#5A1418] bg-[#5A1418]/10 border border-[#5A1418]/30 space-y-2">
-              <p>{authError}</p>
-              {authError.includes('Authorized domains') && (
-                <a
-                  href={`https://console.firebase.google.com/project/${FIREBASE_PROJECT_ID}/authentication/settings`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block font-semibold underline"
-                >
-                  Open Firebase Authorized Domains Settings →
-                </a>
-              )}
+        <div className="w-full max-w-md bg-[#FFFDF7] border border-[#E2D8C5] p-8 space-y-6">
+          <div className="space-y-2 text-center">
+            <div className="text-xs font-mono uppercase tracking-wider text-[#5A1418]">
+              Prime System Group · Restricted Admin Portal
             </div>
-          )}
+            <LayoutDashboard className="w-8 h-8 text-[#5A1418] mx-auto" />
+            <h1 className="text-2xl font-bold text-[#1F1815]">
+              Admin Sign In
+            </h1>
+            <p className="text-sm text-[#584B44]">
+              Enter your administrator email and password to access the management console.
+            </p>
+          </div>
 
-          <button
-            type="button"
-            disabled={signingIn}
-            onClick={handleAdminGoogleSignIn}
-            className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-[#5A1418] text-[#FAF6EA] text-sm font-semibold hover:bg-[#400D10] disabled:opacity-60 transition-colors cursor-pointer"
-          >
-            <LogIn className="w-4 h-4" />
-            {signingIn ? 'Connecting Google Account...' : 'Continue with Google Admin Account'}
-          </button>
+          <form onSubmit={handleAdminEmailLogin} className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-[#584B44] mb-1">
+                Admin Email
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-[#7C6E65] absolute left-3 top-3 pointer-events-none" />
+                <input
+                  type="email"
+                  required
+                  autoComplete="email"
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  placeholder="admin@mail.com"
+                  className="w-full pl-9 pr-3 py-2.5 text-sm bg-[#FAF6EA] border border-[#E2D8C5] focus:outline-none focus:border-[#5A1418]"
+                />
+              </div>
+            </div>
 
-          <button
-            type="button"
-            disabled={signingIn}
-            onClick={handleAdminRedirectSignIn}
-            className="text-xs font-medium text-[#584B44] hover:text-[#5A1418] underline cursor-pointer"
-          >
-            Popup blocked? Sign in via redirect instead
-          </button>
+            <div>
+              <label className="block text-xs font-medium text-[#584B44] mb-1">
+                Password
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-[#7C6E65] absolute left-3 top-3 pointer-events-none" />
+                <input
+                  type={showLoginPassword ? 'text' : 'password'}
+                  required
+                  autoComplete="current-password"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="Enter admin password"
+                  className="w-full pl-9 pr-10 py-2.5 text-sm bg-[#FAF6EA] border border-[#E2D8C5] focus:outline-none focus:border-[#5A1418]"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowLoginPassword((v) => !v)}
+                  aria-label={showLoginPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-2.5 top-2.5 text-[#7C6E65] hover:text-[#1F1815] cursor-pointer"
+                >
+                  {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {authError && (
+              <div className="p-3 text-left text-xs text-[#5A1418] bg-[#5A1418]/10 border border-[#5A1418]/30 space-y-2">
+                <p className="font-medium">{authError}</p>
+                {operationNotAllowed && (
+                  <div className="space-y-1.5 text-[#1F1815]">
+                    <p>
+                      Enable the <strong>Email/Password</strong> sign-in provider once in Firebase Console, then click Sign In again:
+                    </p>
+                    <a
+                      href={`https://console.firebase.google.com/project/${FIREBASE_PROJECT_ID}/authentication/providers`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block font-semibold text-[#5A1418] underline"
+                    >
+                      Open Firebase Auth Providers →
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={signingIn}
+              className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-[#5A1418] text-[#FAF6EA] text-sm font-semibold hover:bg-[#400D10] disabled:opacity-60 transition-colors cursor-pointer"
+            >
+              <LogIn className="w-4 h-4" />
+              {signingIn ? 'Verifying Credentials...' : 'Sign In'}
+            </button>
+          </form>
         </div>
       </div>
     );
   }
 
   if (!isAdmin) {
+    const isAdminEmailUser = user.email?.toLowerCase() === ADMIN_LOGIN_EMAIL;
     return (
       <div className="min-h-screen bg-[#FAF6EA] flex items-center justify-center p-6">
         <div className="w-full max-w-lg bg-[#FFFDF7] border border-[#E2D8C5] p-8 text-center space-y-4">
           <ShieldAlert className="w-8 h-8 text-[#5A1418] mx-auto" />
           <h1 className="text-xl font-bold text-[#1F1815]">
-            Administrator Access Denied
+            {isAdminEmailUser ? 'Complete One-Time Admin Authorization' : 'Administrator Access Denied'}
           </h1>
           <p className="text-sm text-[#584B44]">
-            Signed in as <span className="font-mono text-[#1F1815]">{user.email}</span>. This account is not authorized to access the Prime System Group Admin Portal.
+            Signed in as <span className="font-mono text-[#1F1815]">{user.email}</span>.
           </p>
+
+          {isAdminEmailUser ? (
+            <div className="text-left p-4 bg-[#F3ECE0] border border-[#E2D8C5] space-y-3 text-xs text-[#1F1815]">
+              <p className="leading-relaxed">
+                Your Firebase Auth credentials succeeded. To authorize database admin permissions for this account, create a document in Firestore under collection{' '}
+                <span className="font-mono font-semibold">admins</span> with document ID equal to your UID:
+              </p>
+              <div className="flex items-center justify-between gap-2 p-2.5 bg-[#FFFDF7] border border-[#E2D8C5]">
+                <span className="font-mono text-[11px] break-all">{user.uid}</span>
+                <button
+                  type="button"
+                  onClick={() => handleCopyUid(user.uid)}
+                  className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold border border-[#E2D8C5] hover:border-[#5A1418] shrink-0 cursor-pointer"
+                >
+                  <Copy className="w-3 h-3" />
+                  {copiedUid ? 'Copied' : 'Copy UID'}
+                </button>
+              </div>
+              <p className="text-[#584B44] font-mono text-[11px]">
+                Fields: uid (&quot;{user.uid}&quot;), email (&quot;{user.email}&quot;), role (&quot;admin&quot;), createdAt (timestamp)
+              </p>
+              <div className="flex flex-wrap items-center gap-3 pt-1">
+                <a
+                  href={`https://console.firebase.google.com/project/${FIREBASE_PROJECT_ID}/firestore/databases/${FIREBASE_DATABASE_ID}/data`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-[#5A1418] underline"
+                >
+                  Open Firestore Console →
+                </a>
+                <button
+                  type="button"
+                  disabled={checkingRole}
+                  onClick={handleRecheckAuthorization}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#5A1418] text-[#FAF6EA] hover:bg-[#400D10] cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${checkingRole ? 'animate-spin' : ''}`} />
+                  {checkingRole ? 'Checking...' : 'Check Authorization Now'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-[#584B44]">
+              This account is not authorized to access the Prime System Group Admin Portal. Sign out to log in with your administrator email and password.
+            </p>
+          )}
+
           <button
             type="button"
             onClick={() => handleAdminSignOut()}
             className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold border border-[#5A1418] text-[#5A1418] hover:bg-[#5A1418] hover:text-[#FAF6EA] transition-colors cursor-pointer"
           >
             <LogOut className="w-4 h-4" />
-            Switch Account
+            {isAdminEmailUser ? 'Sign Out' : 'Switch to Admin Login'}
           </button>
         </div>
       </div>

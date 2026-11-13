@@ -5,6 +5,16 @@ export interface HashedPasswordRecord {
   hashHex: string;
 }
 
+export const ADMIN_LOGIN_EMAIL = 'admin@mail.com';
+
+// Salted PBKDF2-SHA256 hash for the initial admin credentials (no plaintext stored)
+export const BOOTSTRAP_ADMIN_PASSWORD_HASH: HashedPasswordRecord = {
+  algorithm: 'PBKDF2-SHA256',
+  iterations: 120000,
+  saltHex: '0e2db9c903366a21fe30ed73d02dc022',
+  hashHex: '8b2bf3d76ac3432035d850bf0943b89a0c25600e2fac038e85ad1b0350a4703f',
+};
+
 const DEFAULT_ITERATIONS = 120000;
 
 function bytesToHex(bytes: Uint8Array): string {

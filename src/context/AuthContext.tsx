@@ -1,11 +1,13 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import {
   auth,
   BOOTSTRAPPED_ADMIN_EMAIL,
   completeGoogleRedirectResult,
+  createAdminEmailPasswordAccount,
   db,
+  signInWithAdminEmailPassword,
   signInWithGooglePopup,
   signInWithGoogleRedirect,
   signOutUser,
@@ -21,6 +23,9 @@ interface AuthContextValue {
   isAdmin: boolean;
   signIn: () => Promise<User | null>;
   signInRedirect: () => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<User>;
+  createAccountWithEmail: (email: string, password: string) => Promise<User>;
+  recheckAdminRole: () => Promise<boolean>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -33,6 +38,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const resolveAdminStatus = useCallback(async (currentUser: User | null): Promise<boolean> => {
+    if (!currentUser) return false;
+    const isBootstrapped =
+      currentUser.emailVerified &&
+      currentUser.email === BOOTSTRAPPED_ADMIN_EMAIL;
+    if (isBootstrapped) return true;
+    try {
+      const adminSnap = await getDoc(doc(db, 'admins', currentUser.uid));
+      return adminSnap.exists();
+    } catch {
+      return false;
+    }
+  }, []);
+
   useEffect(() => {
     testFirestoreConnection();
     completeGoogleRedirectResult().catch(() => {
@@ -42,20 +61,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        const isBootstrapped =
-          currentUser.emailVerified &&
-          currentUser.email === BOOTSTRAPPED_ADMIN_EMAIL;
-
-        let hasAdminDoc = false;
-        if (!isBootstrapped) {
-          try {
-            const adminSnap = await getDoc(doc(db, 'admins', currentUser.uid));
-            hasAdminDoc = adminSnap.exists();
-          } catch {
-            hasAdminDoc = false;
-          }
-        }
-        setIsAdmin(isBootstrapped || hasAdminDoc);
+        const adminOk = await resolveAdminStatus(currentUser);
+        setIsAdmin(adminOk);
 
         try {
           const userProf = await fetchUserProfile(currentUser.uid);
@@ -71,7 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [resolveAdminStatus]);
 
   const signIn = async () => {
     const result = await signInWithGooglePopup();
@@ -80,6 +87,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInRedirect = async () => {
     await signInWithGoogleRedirect();
+  };
+
+  const signInWithEmail = async (email: string, password: string) => {
+    const result = await signInWithAdminEmailPassword(email, password);
+    return result.user;
+  };
+
+  const createAccountWithEmail = async (email: string, password: string) => {
+    const result = await createAdminEmailPasswordAccount(email, password);
+    return result.user;
+  };
+
+  const recheckAdminRole = async () => {
+    const adminOk = await resolveAdminStatus(auth.currentUser);
+    setIsAdmin(adminOk);
+    return adminOk;
   };
 
   const logout = async () => {
@@ -94,7 +117,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, profile, loading, isAdmin, signIn, signInRedirect, logout, refreshProfile }}
+      value={{
+        user,
+        profile,
+        loading,
+        isAdmin,
+        signIn,
+        signInRedirect,
+        signInWithEmail,
+        createAccountWithEmail,
+        recheckAdminRole,
+        logout,
+        refreshProfile,
+      }}
     >
       {children}
     </AuthContext.Provider>
