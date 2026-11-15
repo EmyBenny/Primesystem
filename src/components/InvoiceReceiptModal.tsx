@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2, Download, MessageCircle, Printer, X } from 'lucide-react';
+import { CheckCircle2, FileDown, ImageDown, MessageCircle, Printer, X } from 'lucide-react';
 import { COMPANY_INFO } from '../data/catalogSeed';
 import { useAuth } from '../context/AuthContext';
 import { fetchOrderItems } from '../services/firestoreService';
+import { downloadReceiptAsImage, downloadReceiptAsPdf } from '../utils/receiptExport';
 import { Order, OrderItem } from '../types';
 
 interface InvoiceReceiptModalProps {
@@ -30,6 +31,7 @@ export function InvoiceReceiptModal({ order, onClose }: InvoiceReceiptModalProps
   const { user, isAdmin } = useAuth();
   const [items, setItems] = useState<OrderItem[]>(order?.items || []);
   const [loadingItems, setLoadingItems] = useState(false);
+  const [downloadingFormat, setDownloadingFormat] = useState<'pdf' | 'image' | null>(null);
 
   useEffect(() => {
     if (!order) return;
@@ -62,50 +64,22 @@ export function InvoiceReceiptModal({ order, onClose }: InvoiceReceiptModalProps
     window.print();
   };
 
-  const handleDownloadText = () => {
-    const lines = [
-      'PRIME SYSTEM GROUP — OFFICIAL INVOICE RECEIPT',
-      `Invoice Number: ${order.invoiceNumber}`,
-      `Document Type: ${order.orderType === 'booking' ? 'Fabrication / Item Booking Receipt' : 'Commercial Purchase Invoice'}`,
-      `Issued Date: ${formatDate(order.createdAt)}`,
-      `Status: ${order.status}`,
-      '',
-      'SELLER:',
-      `Prime System Group (${COMPANY_INFO.registrationCode})`,
-      `Office Location: ${COMPANY_INFO.headquarters}`,
-      `WhatsApp Dispatch: ${COMPANY_INFO.whatsappNumber}`,
-      `Email: ${COMPANY_INFO.email}`,
-      '',
-      'BILL TO / DESTINATION:',
-      `Customer: ${order.customerName}`,
-      order.companyName ? `Company: ${order.companyName}` : '',
-      `Email: ${order.customerEmail}`,
-      `Phone / WhatsApp: ${order.customerPhone}`,
-      `Region: ${order.destinationRegion}`,
-      `Address: ${order.shippingAddress}`,
-      order.bookingDate ? `Scheduled Date: ${order.bookingDate}` : '',
-      '',
-      'ITEMIZED SCHEDULE:',
-      ...items.map(
-        (it) =>
-          `- [${it.sku}] ${it.productName} | ${it.quantity} ${it.unit} x $${it.unitPriceUsd.toLocaleString()} = $${it.lineTotalUsd.toLocaleString()}`
-      ),
-      '',
-      `Subtotal: $${order.subtotalUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
-      `Consumption / Export Tax: $${order.taxUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
-      `TOTAL AMOUNT: $${order.totalUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
-      order.notes ? `\nNotes: ${order.notes}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n');
+  const handleDownloadPdf = () => {
+    setDownloadingFormat('pdf');
+    try {
+      downloadReceiptAsPdf(order, items);
+    } finally {
+      setDownloadingFormat(null);
+    }
+  };
 
-    const blob = new Blob([lines], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${order.invoiceNumber}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleDownloadImage = async () => {
+    setDownloadingFormat('image');
+    try {
+      await downloadReceiptAsImage(order, items);
+    } finally {
+      setDownloadingFormat(null);
+    }
   };
 
   const whatsappBody = encodeURIComponent(
@@ -130,22 +104,32 @@ export function InvoiceReceiptModal({ order, onClose }: InvoiceReceiptModalProps
             <CheckCircle2 className="w-4 h-4 shrink-0" />
             <span>Official Invoice Receipt Ready</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={handlePrint}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#5A1418] text-[#FAF6EA] hover:bg-[#400D10] transition-colors cursor-pointer whitespace-nowrap shrink-0"
+              disabled={downloadingFormat !== null || loadingItems}
+              onClick={handleDownloadPdf}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#5A1418] text-[#FAF6EA] hover:bg-[#400D10] disabled:opacity-60 transition-colors cursor-pointer whitespace-nowrap shrink-0"
             >
-              <Printer className="w-3.5 h-3.5" />
-              Print / Save PDF
+              <FileDown className="w-3.5 h-3.5" />
+              {downloadingFormat === 'pdf' ? 'Saving PDF...' : 'Download PDF'}
             </button>
             <button
               type="button"
-              onClick={handleDownloadText}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-[#5A1418] text-[#5A1418] hover:bg-[#5A1418] hover:text-[#FAF6EA] transition-colors cursor-pointer whitespace-nowrap shrink-0"
+              disabled={downloadingFormat !== null || loadingItems}
+              onClick={handleDownloadImage}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-[#5A1418] text-[#5A1418] hover:bg-[#5A1418] hover:text-[#FAF6EA] disabled:opacity-60 transition-colors cursor-pointer whitespace-nowrap shrink-0"
             >
-              <Download className="w-3.5 h-3.5" />
-              Download Receipt
+              <ImageDown className="w-3.5 h-3.5" />
+              {downloadingFormat === 'image' ? 'Saving PNG...' : 'Download Image'}
+            </button>
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-[#E2D8C5] bg-[#FFFDF7] text-[#584B44] hover:border-[#5A1418] hover:text-[#5A1418] transition-colors cursor-pointer whitespace-nowrap shrink-0"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              Print
             </button>
             <button
               type="button"
