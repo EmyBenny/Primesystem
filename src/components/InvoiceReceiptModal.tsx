@@ -92,24 +92,35 @@ export function InvoiceReceiptModal({ order, onClose }: InvoiceReceiptModalProps
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 sm:p-4 print:static print:bg-transparent print:p-0"
       role="dialog"
       aria-modal="true"
       aria-labelledby="invoice-modal-title"
     >
-      <div className="relative w-full max-w-3xl bg-[#FFFDF7] border border-[#E2D8C5] text-[#1F1815] shadow-xl my-8">
-        {/* Top Action Bar (hidden during print) */}
-        <div className="no-print flex flex-wrap items-center justify-between gap-3 px-6 py-4 bg-[#F3ECE0] border-b border-[#E2D8C5]">
-          <div className="flex items-center gap-2 text-sm font-medium text-[#5A1418]">
-            <CheckCircle2 className="w-4 h-4 shrink-0" />
-            <span>Official Invoice Receipt Ready</span>
+      <div className="relative w-full max-w-3xl max-h-[94dvh] flex flex-col bg-[#FFFDF7] border border-[#E2D8C5] text-[#1F1815] shadow-xl overflow-hidden print:max-h-none print:overflow-visible print:shadow-none print:border-0">
+        {/* Pinned Top Action Bar (always visible on mobile; hidden during print) */}
+        <div className="no-print shrink-0 px-4 py-3 sm:px-6 sm:py-4 bg-[#F3ECE0] border-b border-[#E2D8C5] space-y-2.5 sm:space-y-0 sm:flex sm:items-center sm:justify-between sm:gap-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-xs sm:text-sm font-medium text-[#5A1418]">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>Official Invoice Receipt Ready</span>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close invoice receipt"
+              className="sm:hidden p-1.5 text-[#584B44] hover:text-[#1F1815] transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
+
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               disabled={downloadingFormat !== null || loadingItems}
               onClick={handleDownloadPdf}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#5A1418] text-[#FAF6EA] hover:bg-[#400D10] disabled:opacity-60 transition-colors cursor-pointer whitespace-nowrap shrink-0"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#5A1418] text-[#FAF6EA] hover:bg-[#400D10] disabled:opacity-60 transition-colors cursor-pointer whitespace-nowrap shrink-0"
             >
               <FileDown className="w-3.5 h-3.5" />
               {downloadingFormat === 'pdf' ? 'Saving PDF...' : 'Download PDF'}
@@ -118,7 +129,7 @@ export function InvoiceReceiptModal({ order, onClose }: InvoiceReceiptModalProps
               type="button"
               disabled={downloadingFormat !== null || loadingItems}
               onClick={handleDownloadImage}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-[#5A1418] text-[#5A1418] hover:bg-[#5A1418] hover:text-[#FAF6EA] disabled:opacity-60 transition-colors cursor-pointer whitespace-nowrap shrink-0"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-[#5A1418] text-[#5A1418] hover:bg-[#5A1418] hover:text-[#FAF6EA] disabled:opacity-60 transition-colors cursor-pointer whitespace-nowrap shrink-0"
             >
               <ImageDown className="w-3.5 h-3.5" />
               {downloadingFormat === 'image' ? 'Saving PNG...' : 'Download Image'}
@@ -126,7 +137,7 @@ export function InvoiceReceiptModal({ order, onClose }: InvoiceReceiptModalProps
             <button
               type="button"
               onClick={handlePrint}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-[#E2D8C5] bg-[#FFFDF7] text-[#584B44] hover:border-[#5A1418] hover:text-[#5A1418] transition-colors cursor-pointer whitespace-nowrap shrink-0"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-[#E2D8C5] bg-[#FFFDF7] text-[#584B44] hover:border-[#5A1418] hover:text-[#5A1418] transition-colors cursor-pointer whitespace-nowrap shrink-0"
             >
               <Printer className="w-3.5 h-3.5" />
               Print
@@ -135,44 +146,44 @@ export function InvoiceReceiptModal({ order, onClose }: InvoiceReceiptModalProps
               type="button"
               onClick={onClose}
               aria-label="Close invoice receipt"
-              className="p-1.5 text-[#584B44] hover:text-[#1F1815] transition-colors cursor-pointer"
+              className="hidden sm:inline-flex p-1.5 text-[#584B44] hover:text-[#1F1815] transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* Printable Invoice Document */}
-        <div className="p-6 sm:p-10 space-y-8">
+        {/* Scrollable Printable Invoice Document */}
+        <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-10 space-y-6 sm:space-y-8 print:overflow-visible print:p-0">
           {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6 pb-6 border-b border-[#E2D8C5]">
-            <div>
-              <p className="text-xs font-medium tracking-wider uppercase text-[#5A1418] mb-1">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 sm:gap-6 pb-5 sm:pb-6 border-b border-[#E2D8C5]">
+            <div className="min-w-0">
+              <p className="text-[11px] sm:text-xs font-medium tracking-wider uppercase text-[#5A1418] mb-1">
                 {order.orderType === 'booking'
                   ? 'Official Booking & Fabrication Receipt'
                   : 'Official Commercial Invoice Receipt'}
               </p>
               <h2
                 id="invoice-modal-title"
-                className="text-2xl font-bold tracking-tight text-[#1F1815]"
+                className="text-xl sm:text-2xl font-bold tracking-tight text-[#1F1815]"
               >
                 {COMPANY_INFO.name}
               </h2>
-              <p className="text-sm text-[#584B44] mt-1">
+              <p className="text-xs sm:text-sm text-[#584B44] mt-1">
                 Japan Corporate Headquarters · {COMPANY_INFO.headquarters}
               </p>
-              <p className="text-xs font-mono text-[#7C6E65] mt-1">
+              <p className="text-[11px] sm:text-xs font-mono text-[#7C6E65] mt-1 break-words">
                 Reg: {COMPANY_INFO.registrationCode} · WhatsApp: {COMPANY_INFO.whatsappNumber}
               </p>
             </div>
-            <div className="sm:text-right">
-              <div className="text-xs text-[#7C6E65] uppercase tracking-wider">
+            <div className="sm:text-right shrink-0">
+              <div className="text-[11px] sm:text-xs text-[#7C6E65] uppercase tracking-wider">
                 Invoice Number
               </div>
-              <div className="text-xl font-mono font-semibold text-[#5A1418] tabular-nums mt-0.5">
+              <div className="text-lg sm:text-xl font-mono font-semibold text-[#5A1418] tabular-nums mt-0.5">
                 {order.invoiceNumber}
               </div>
-              <div className="text-xs text-[#584B44] mt-2 tabular-nums">
+              <div className="text-xs text-[#584B44] mt-1.5 sm:mt-2 tabular-nums">
                 Issued: {formatDate(order.createdAt)}
               </div>
               <div className="text-xs font-medium text-[#1F1815] mt-1">
@@ -182,29 +193,29 @@ export function InvoiceReceiptModal({ order, onClose }: InvoiceReceiptModalProps
           </div>
 
           {/* Client & Dispatch Details */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm">
-            <div className="space-y-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-6 text-sm">
+            <div className="space-y-1 min-w-0">
               <div className="text-xs font-medium uppercase tracking-wider text-[#7C6E65]">
                 Billed To
               </div>
-              <div className="font-semibold text-[#1F1815]">{order.customerName}</div>
+              <div className="font-semibold text-[#1F1815] break-words">{order.customerName}</div>
               {order.companyName && (
-                <div className="text-[#584B44]">{order.companyName}</div>
+                <div className="text-[#584B44] break-words">{order.companyName}</div>
               )}
-              <div className="text-[#584B44]">{order.customerEmail}</div>
+              <div className="text-[#584B44] break-all">{order.customerEmail}</div>
               <div className="text-[#584B44] font-mono text-xs tabular-nums">
                 {order.customerPhone}
               </div>
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0">
               <div className="text-xs font-medium uppercase tracking-wider text-[#7C6E65]">
                 Delivery & Schedule
               </div>
               <div className="font-medium text-[#1F1815]">
                 Market Region: {order.destinationRegion}
               </div>
-              <div className="text-[#584B44]">{order.shippingAddress}</div>
+              <div className="text-[#584B44] break-words">{order.shippingAddress}</div>
               {order.bookingDate && (
                 <div className="text-xs font-mono text-[#5A1418] pt-1 tabular-nums">
                   Scheduled Slot: {order.bookingDate}
@@ -215,16 +226,16 @@ export function InvoiceReceiptModal({ order, onClose }: InvoiceReceiptModalProps
 
           {/* Line Items Table */}
           <div className="overflow-x-auto border-t border-b border-[#E2D8C5]">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full min-w-[460px] text-left border-collapse">
               <thead>
                 <tr className="border-b border-[#E2D8C5] text-xs font-medium uppercase tracking-wider text-[#7C6E65]">
-                  <th className="py-3 pr-4">Item / SKU</th>
-                  <th className="py-3 px-3 text-right">Qty</th>
-                  <th className="py-3 px-3 text-right">Unit Price</th>
-                  <th className="py-3 pl-3 text-right">Line Total</th>
+                  <th className="py-3 pr-3">Item / SKU</th>
+                  <th className="py-3 px-2 sm:px-3 text-right">Qty</th>
+                  <th className="py-3 px-2 sm:px-3 text-right">Unit Price</th>
+                  <th className="py-3 pl-2 sm:pl-3 text-right">Line Total</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#E2D8C5]/70 text-sm">
+              <tbody className="divide-y divide-[#E2D8C5]/70 text-xs sm:text-sm">
                 {loadingItems ? (
                   <tr>
                     <td colSpan={4} className="py-6 text-center text-[#7C6E65]">
@@ -240,21 +251,21 @@ export function InvoiceReceiptModal({ order, onClose }: InvoiceReceiptModalProps
                 ) : (
                   items.map((item) => (
                     <tr key={item.id}>
-                      <td className="py-3.5 pr-4">
+                      <td className="py-3 pr-3">
                         <div className="font-medium text-[#1F1815]">
                           {item.productName}
                         </div>
-                        <div className="text-xs font-mono text-[#7C6E65] mt-0.5">
+                        <div className="text-[11px] sm:text-xs font-mono text-[#7C6E65] mt-0.5">
                           {item.sku} · {item.category}
                         </div>
                       </td>
-                      <td className="py-3.5 px-3 text-right font-mono tabular-nums text-[#1F1815] whitespace-nowrap">
+                      <td className="py-3 px-2 sm:px-3 text-right font-mono tabular-nums text-[#1F1815] whitespace-nowrap">
                         {item.quantity} <span className="text-xs text-[#7C6E65]">{item.unit}</span>
                       </td>
-                      <td className="py-3.5 px-3 text-right font-mono tabular-nums text-[#584B44]">
+                      <td className="py-3 px-2 sm:px-3 text-right font-mono tabular-nums text-[#584B44] whitespace-nowrap">
                         ${item.unitPriceUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                       </td>
-                      <td className="py-3.5 pl-3 text-right font-mono font-medium tabular-nums text-[#1F1815]">
+                      <td className="py-3 pl-2 sm:pl-3 text-right font-mono font-medium tabular-nums text-[#1F1815] whitespace-nowrap">
                         ${item.lineTotalUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                       </td>
                     </tr>
@@ -268,7 +279,7 @@ export function InvoiceReceiptModal({ order, onClose }: InvoiceReceiptModalProps
           <div className="flex flex-col sm:flex-row justify-between gap-6 items-start">
             <div className="text-xs text-[#584B44] max-w-sm space-y-2">
               {order.notes && (
-                <div>
+                <div className="break-words">
                   <span className="font-semibold text-[#1F1815]">Project / Fabrication Notes: </span>
                   {order.notes}
                 </div>
@@ -303,7 +314,7 @@ export function InvoiceReceiptModal({ order, onClose }: InvoiceReceiptModalProps
           </div>
 
           {/* WhatsApp Confirmation Footer */}
-          <div className="no-print pt-6 border-t border-[#E2D8C5] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="no-print pt-5 sm:pt-6 border-t border-[#E2D8C5] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
             <span className="text-xs text-[#7C6E65]">
               Need custom engineering clearance or freight coordination?
             </span>
@@ -311,7 +322,7 @@ export function InvoiceReceiptModal({ order, onClose }: InvoiceReceiptModalProps
               href={`${COMPANY_INFO.whatsappLink}?text=${whatsappBody}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium border border-[#5A1418] text-[#5A1418] hover:bg-[#5A1418] hover:text-[#FAF6EA] transition-colors whitespace-nowrap shrink-0"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 text-xs font-medium border border-[#5A1418] text-[#5A1418] hover:bg-[#5A1418] hover:text-[#FAF6EA] transition-colors whitespace-nowrap shrink-0"
             >
               <MessageCircle className="w-4 h-4" />
               Send Invoice via WhatsApp ({COMPANY_INFO.whatsappNumber})
