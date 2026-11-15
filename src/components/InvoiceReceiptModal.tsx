@@ -37,10 +37,11 @@ export function InvoiceReceiptModal({ order, onClose }: InvoiceReceiptModalProps
       setItems(order.items);
       return;
     }
-    if (!user) return;
+    const targetUserId = isAdmin ? user?.uid || order.userId : order.userId;
+    if (!targetUserId) return;
     let active = true;
     setLoadingItems(true);
-    fetchOrderItems(order.id, user.uid, isAdmin)
+    fetchOrderItems(order.id, targetUserId, isAdmin)
       .then((fetched) => {
         if (active) setItems(fetched);
       })

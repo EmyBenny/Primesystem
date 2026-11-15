@@ -2,11 +2,11 @@
 
 ## 1. Data Invariants
 1. **Product Integrity**: Every document in `/products/{productId}` must pass `isValidProduct`, enforce strict key allowlists (`hasAll` + `hasOnly`), enforce non-negative pricing, bounded arrays (`<= 10`), and only be created, updated, or deleted by a verified Administrator.
-2. **Order & Invoice Ownership**: Every document in `/orders/{orderId}` must be created by a verified authenticated user (`request.auth.token.email_verified == true`) with `userId == request.auth.uid`, initial `status == 'Confirmed'`, server timestamps (`createdAt == request.time`, `updatedAt == request.time`), and valid `PSG-YYYY-NNNN` invoice format.
-3. **Order Line-Item Relational Sync (Master Gate)**: Every document in `/orders/{orderId}/items/{itemId}` requires the parent `/orders/{orderId}` document to exist (or `existsAfter` in the atomic batch) and belong to `request.auth.uid`.
-4. **Terminal State Locking**: Once an order reaches `'Completed'` or `'Cancelled'`, non-admins cannot alter it; in fact only Admins can transition order statuses via `affectedKeys().hasOnly(['status', 'updatedAt'])`.
-5. **PII Isolation**: Customer emails, phone numbers, and shipping addresses in `/orders`, `/inquiries`, and `/users` are strictly unreadable by other customers (`resource.data.userId == request.auth.uid || isAdmin()`).
-6. **Privilege Escalation Prevention**: Users cannot write to `/admins/{userId}` unless already an authorized Admin. Unverified emails are always denied writes on customer collections.
+2. **Order & Invoice Ownership**: Every document in `/orders/{orderId}` must be created either by a signed-in user (`userId == request.auth.uid`) or a storefront visitor using a `guest_` client ID (`userId.matches('^guest_[a-zA-Z0-9_\\-]{8,64}$')`), with initial `status == 'Confirmed'`, server timestamps (`createdAt == request.time`, `updatedAt == request.time`), and valid `PSG-YYYY-NNNN` invoice format.
+3. **Order Line-Item Relational Sync (Master Gate)**: Every document in `/orders/{orderId}/items/{itemId}` requires the parent `/orders/{orderId}` document to exist (or `existsAfter` in the atomic batch) and match `incoming().userId`.
+4. **Terminal State Locking**: Once an order reaches `'Completed'` or `'Cancelled'`, non-admins cannot alter it; only Admins can transition order statuses arbitrarily via `affectedKeys().hasOnly(['status', 'bookingDate', 'notes', 'updatedAt'])`.
+5. **PII Isolation**: B2B inquiries in `/inquiries` and user profiles in `/users` are strictly unreadable by visitors or other customers (`resource.data.userId == request.auth.uid || isAdmin()`).
+6. **Privilege Escalation Prevention**: Users and visitors cannot write to `/admins/{userId}`, `/products`, or `/adminSecurity` unless already an authorized Admin.
 
 ## 2. The "Dirty Dozen" Adversarial Payloads
 1. **Unauthenticated Product Creation**: `create /products/p1` without auth -> `PERMISSION_DENIED`.

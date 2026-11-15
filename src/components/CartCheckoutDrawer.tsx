@@ -1,8 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Calendar, Minus, Plus, ShoppingBag, Trash2, X } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
-import { createOrderWithItems, upsertUserProfile } from '../services/firestoreService';
+import { createOrderWithItems } from '../services/firestoreService';
+import {
+  getLocalBillingProfile,
+  getOrCreateGuestClientId,
+  saveLocalBillingProfile,
+  saveLocalGuestOrder,
+} from '../utils/guestSession';
 import { DestinationRegion } from '../types';
 import { ResilientImage } from './ResilientImage';
 
@@ -15,7 +20,6 @@ const REGIONS: DestinationRegion[] = [
 ];
 
 export function CartCheckoutDrawer() {
-  const { user, profile, signIn } = useAuth();
   const {
     items,
     orderMode,
@@ -41,14 +45,15 @@ export function CartCheckoutDrawer() {
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
-    if (user) {
-      setCustomerName((prev) => prev || profile?.displayName || user.displayName || '');
-      setCustomerEmail((prev) => prev || profile?.email || user.email || '');
-      setCompanyName((prev) => prev || profile?.companyName || '');
-      setCustomerPhone((prev) => prev || profile?.phone || '');
-      setShippingAddress((prev) => prev || profile?.shippingAddress || '');
+    const saved = getLocalBillingProfile();
+    if (saved) {
+      setCustomerName((prev) => prev || saved.customerName || '');
+      setCustomerEmail((prev) => prev || saved.customerEmail || '');
+      setCompanyName((prev) => prev || saved.companyName || '');
+      setCustomerPhone((prev) => prev || saved.customerPhone || '');
+      setShippingAddress((prev) => prev || saved.shippingAddress || '');
     }
-  }, [user, profile]);
+  }, [drawerOpen]);
 
   if (!drawerOpen) return null;
 
@@ -71,30 +76,20 @@ export function CartCheckoutDrawer() {
 
     setSubmitting(true);
     try {
-      let activeUser = user;
-      if (!activeUser) {
-        activeUser = await signIn();
-      }
-      if (!activeUser) {
-        setErrorMsg('Sign-in is required to issue an official numbered invoice.');
-        setSubmitting(false);
-        return;
-      }
+      const clientId = getOrCreateGuestClientId();
+      const finalName = customerName.trim();
+      const finalEmail = customerEmail.trim();
 
-      const finalName = customerName.trim() || activeUser.displayName || 'Valued Client';
-      const finalEmail = customerEmail.trim() || activeUser.email || '';
-
-      await upsertUserProfile({
-        uid: activeUser.uid,
-        displayName: finalName,
-        email: finalEmail,
+      saveLocalBillingProfile({
+        customerName: finalName,
         companyName: companyName.trim(),
-        phone: customerPhone.trim(),
+        customerEmail: finalEmail,
+        customerPhone: customerPhone.trim(),
         shippingAddress: shippingAddress.trim(),
       });
 
       const createdOrder = await createOrderWithItems({
-        userId: activeUser.uid,
+        userId: clientId,
         orderType: orderMode,
         customerName: finalName,
         companyName: companyName.trim(),
@@ -107,6 +102,7 @@ export function CartCheckoutDrawer() {
         cartItems: items,
       });
 
+      saveLocalGuestOrder(createdOrder);
       clearCart();
       setDrawerOpen(false);
       setActiveInvoice(createdOrder);
@@ -242,19 +238,10 @@ export function CartCheckoutDrawer() {
           {/* Checkout & Invoice Issuance Form */}
           {items.length > 0 && (
             <form id="psg-checkout-form" onSubmit={handleCheckout} className="space-y-4">
-              <div className="flex items-center justify-between pt-2">
+              <div className="pt-2">
                 <div className="text-xs font-medium uppercase tracking-wider text-[#7C6E65]">
                   Billing & Delivery Details (For Official Invoice)
                 </div>
-                {!user && (
-                  <button
-                    type="button"
-                    onClick={() => signIn()}
-                    className="text-xs font-semibold text-[#5A1418] hover:underline cursor-pointer"
-                  >
-                    Sign in to auto-fill
-                  </button>
-                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -432,11 +419,9 @@ export function CartCheckoutDrawer() {
             >
               {submitting
                 ? 'Issuing Official Invoice...'
-                : user
-                ? orderMode === 'booking'
-                  ? 'Confirm Booking & Issue Invoice'
-                  : 'Place Order & Issue Invoice'
-                : 'Sign In with Google & Issue Invoice'}
+                : orderMode === 'booking'
+                ? 'Confirm Booking & Issue Invoice'
+                : 'Place Order & Issue Invoice'}
             </button>
           </div>
         )}

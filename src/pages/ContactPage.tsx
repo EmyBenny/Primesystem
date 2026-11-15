@@ -1,14 +1,13 @@
 import React, { useState } from 'react';
 import { CheckCircle2, Mail, MapPin, MessageCircle, Phone } from 'lucide-react';
 import { COMPANY_INFO } from '../data/catalogSeed';
-import { useAuth } from '../context/AuthContext';
 import { createInquiry } from '../services/firestoreService';
+import { getOrCreateGuestClientId } from '../utils/guestSession';
 
 export function ContactPage() {
-  const { user, signIn } = useAuth();
-  const [name, setName] = useState(user?.displayName || '');
+  const [name, setName] = useState('');
   const [company, setCompany] = useState('');
-  const [email, setEmail] = useState(user?.email || '');
+  const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [division, setDivision] = useState('Manufacturing & Fabrication');
   const [message, setMessage] = useState('');
@@ -21,20 +20,12 @@ export function ContactPage() {
     setErrorMsg('');
     setSubmitting(true);
     try {
-      let activeUser = user;
-      if (!activeUser) {
-        activeUser = await signIn();
-      }
-      if (!activeUser) {
-        setErrorMsg('Sign-in is required to register an inquiry with our Japan desk.');
-        setSubmitting(false);
-        return;
-      }
+      const clientId = getOrCreateGuestClientId();
       await createInquiry({
-        userId: activeUser.uid,
-        name: name.trim() || activeUser.displayName || 'Client',
+        userId: clientId,
+        name: name.trim(),
         company: company.trim(),
-        email: email.trim() || activeUser.email || '',
+        email: email.trim(),
         phone: phone.trim(),
         market: 'Japan',
         division,
@@ -248,11 +239,7 @@ export function ContactPage() {
                 disabled={submitting}
                 className="px-6 py-3 text-sm font-semibold bg-[#5A1418] text-[#FAF6EA] hover:bg-[#400D10] disabled:opacity-60 transition-colors cursor-pointer"
               >
-                {submitting
-                  ? 'Sending...'
-                  : user
-                  ? 'Send Message'
-                  : 'Sign In with Google & Send'}
+                {submitting ? 'Sending...' : 'Send Message'}
               </button>
             </form>
           )}

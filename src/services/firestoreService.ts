@@ -281,6 +281,29 @@ export async function fetchOrderItems(
   }
 }
 
+export async function fetchOrderByInvoiceNumber(invoiceNumber: string): Promise<Order | null> {
+  const clean = invoiceNumber.trim().toUpperCase();
+  if (!/^PSG-[0-9]{4}-[0-9]{4,8}$/.test(clean)) {
+    return null;
+  }
+  const path = 'orders';
+  try {
+    const q = query(collection(db, path), where('invoiceNumber', '==', clean));
+    const snap = await getDocs(q);
+    if (snap.empty) return null;
+    const docSnap = snap.docs[0];
+    const orderData = docSnap.data() as Omit<Order, 'id'>;
+    const items = await fetchOrderItems(docSnap.id, orderData.userId, false);
+    return {
+      id: docSnap.id,
+      ...orderData,
+      items,
+    };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, path);
+  }
+}
+
 export function subscribeUserOrders(
   userId: string,
   onData: (orders: Order[]) => void,

@@ -1,14 +1,13 @@
 import React, { useState } from 'react';
 import { CheckCircle2, MessageCircle } from 'lucide-react';
 import { COMPANY_INFO, INTERNATIONAL_MARKETS } from '../data/catalogSeed';
-import { useAuth } from '../context/AuthContext';
 import { createInquiry } from '../services/firestoreService';
+import { getOrCreateGuestClientId } from '../utils/guestSession';
 
 export function MarketsPage() {
-  const { user, signIn } = useAuth();
-  const [name, setName] = useState(user?.displayName || '');
+  const [name, setName] = useState('');
   const [company, setCompany] = useState('');
-  const [email, setEmail] = useState(user?.email || '');
+  const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [market, setMarket] = useState<'Japan' | 'Europe' | 'Asia' | 'Taiwan' | 'Other'>('Europe');
   const [division, setDivision] = useState('International Trading & Distribution');
@@ -22,20 +21,12 @@ export function MarketsPage() {
     setErrorMsg('');
     setSubmitting(true);
     try {
-      let activeUser = user;
-      if (!activeUser) {
-        activeUser = await signIn();
-      }
-      if (!activeUser) {
-        setErrorMsg('Please sign in with Google to submit a verified B2B inquiry.');
-        setSubmitting(false);
-        return;
-      }
+      const clientId = getOrCreateGuestClientId();
       const id = await createInquiry({
-        userId: activeUser.uid,
-        name: name.trim() || activeUser.displayName || 'Trade Partner',
+        userId: clientId,
+        name: name.trim(),
         company: company.trim(),
-        email: email.trim() || activeUser.email || '',
+        email: email.trim(),
         phone: phone.trim(),
         market,
         division,
@@ -256,11 +247,7 @@ export function MarketsPage() {
                 disabled={submitting}
                 className="px-6 py-3 text-sm font-semibold bg-[#5A1418] text-[#FAF6EA] hover:bg-[#400D10] disabled:opacity-60 transition-colors cursor-pointer"
               >
-                {submitting
-                  ? 'Submitting Inquiry...'
-                  : user
-                  ? 'Submit Trade Inquiry'
-                  : 'Sign In with Google & Submit Inquiry'}
+                {submitting ? 'Submitting Inquiry...' : 'Submit Trade Inquiry'}
               </button>
             </form>
           )}

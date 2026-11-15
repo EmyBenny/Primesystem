@@ -205,17 +205,25 @@ service cloud.firestore {
       allow delete: if isAdmin() && isValidId(productId);
     }
 
+    function isGuestId(uid) {
+      return uid is string && uid.matches('^guest_[a-zA-Z0-9_\\-]{8,64}$');
+    }
+
     match /orders/{orderId} {
-      allow get: if isSignedIn() && isValidId(orderId) && (
-        existing().userId == request.auth.uid || isAdmin()
+      allow get: if isValidId(orderId) && (
+        isAdmin() ||
+        (isSignedIn() && existing().userId == request.auth.uid) ||
+        isGuestId(existing().userId)
       );
-      allow list: if isSignedIn() && (
-        existing().userId == request.auth.uid || isAdmin()
-      );
-      allow create: if isEmailVerified() &&
-        isValidId(orderId) &&
+      allow list: if isAdmin() ||
+        (isSignedIn() && existing().userId == request.auth.uid) ||
+        isGuestId(existing().userId);
+      allow create: if isValidId(orderId) &&
         isValidOrder(incoming()) &&
-        incoming().userId == request.auth.uid &&
+        (
+          (isSignedIn() && incoming().userId == request.auth.uid) ||
+          isGuestId(incoming().userId)
+        ) &&
         incoming().status == 'Confirmed' &&
         incoming().createdAt == request.time &&
         incoming().updatedAt == request.time;
@@ -226,8 +234,10 @@ service cloud.firestore {
         incoming().createdAt == existing().createdAt &&
         incoming().updatedAt == request.time && (
           (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'bookingDate', 'notes', 'updatedAt'])) || (
-            isEmailVerified() &&
-            existing().userId == request.auth.uid &&
+            (
+              (isSignedIn() && existing().userId == request.auth.uid) ||
+              isGuestId(existing().userId)
+            ) &&
             existing().status == 'Confirmed' &&
             incoming().status == 'Cancelled' &&
             incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
@@ -236,20 +246,24 @@ service cloud.firestore {
       allow delete: if false;
 
       match /items/{itemId} {
-        allow get: if isSignedIn() && isValidId(orderId) && isValidId(itemId) && (
-          get(/databases/$(database)/documents/orders/$(orderId)).data.userId == request.auth.uid || isAdmin()
+        allow get: if isValidId(orderId) && isValidId(itemId) && (
+          isAdmin() ||
+          (isSignedIn() && get(/databases/$(database)/documents/orders/$(orderId)).data.userId == request.auth.uid) ||
+          isGuestId(get(/databases/$(database)/documents/orders/$(orderId)).data.userId)
         );
-        allow list: if isSignedIn() && (
-          existing().userId == request.auth.uid || isAdmin()
-        );
-        allow create: if isEmailVerified() &&
-          isValidId(orderId) &&
+        allow list: if isAdmin() ||
+          (isSignedIn() && existing().userId == request.auth.uid) ||
+          isGuestId(existing().userId);
+        allow create: if isValidId(orderId) &&
           isValidId(itemId) &&
           isValidOrderItem(incoming(), orderId) &&
-          incoming().userId == request.auth.uid &&
+          (
+            (isSignedIn() && incoming().userId == request.auth.uid) ||
+            isGuestId(incoming().userId)
+          ) &&
           (
             existsAfter(/databases/$(database)/documents/orders/$(orderId)) &&
-            getAfter(/databases/$(database)/documents/orders/$(orderId)).data.userId == request.auth.uid
+            getAfter(/databases/$(database)/documents/orders/$(orderId)).data.userId == incoming().userId
           );
         allow update, delete: if false;
       }
@@ -262,10 +276,12 @@ service cloud.firestore {
       allow list: if isSignedIn() && (
         existing().userId == request.auth.uid || isAdmin()
       );
-      allow create: if isEmailVerified() &&
-        isValidId(inquiryId) &&
+      allow create: if isValidId(inquiryId) &&
         isValidInquiry(incoming()) &&
-        incoming().userId == request.auth.uid &&
+        (
+          (isSignedIn() && incoming().userId == request.auth.uid) ||
+          isGuestId(incoming().userId)
+        ) &&
         incoming().status == 'New' &&
         incoming().createdAt == request.time;
       allow update: if isAdmin() &&
